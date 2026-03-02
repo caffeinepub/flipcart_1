@@ -146,6 +146,7 @@ export interface _SERVICE {
   'getReviewsForProduct' : ActorMethod<[string], Array<Review>>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'initializeFirstAdmin' : ActorMethod<[string], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'placeOrder' : ActorMethod<[], string>,

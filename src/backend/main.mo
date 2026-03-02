@@ -33,7 +33,7 @@ actor {
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+      Runtime.trap("Unauthorized: Only users can view profiles");
     };
     userProfiles.get(caller);
   };
@@ -432,5 +432,36 @@ actor {
       case (null) { [] };
       case (?reviews) { reviews.toArray() };
     };
+  };
+
+  // 8. First Admin Setup
+  let SETUP_PIN = "1234";
+  var adminInitialized : Bool = false;
+
+  public shared ({ caller }) func initializeFirstAdmin(pin : Text) : async Bool {
+    // Check if caller is anonymous
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Cannot initialize admin for anonymous principal. Please log in with Internet Identity.");
+    };
+
+    // Check PIN
+    if (pin != SETUP_PIN) {
+      Runtime.trap("Unauthorized: Wrong PIN, try again. Please contact admin if you lost your PIN.");
+    };
+
+    // If caller is already admin, return true
+    if (AccessControl.isAdmin(accessControlState, caller)) {
+      return true;
+    };
+
+    // Check if admin has already been initialized
+    if (adminInitialized) {
+      Runtime.trap("Admin already initialized. Contact existing admin for access.");
+    };
+
+    // Set caller as admin and mark as initialized
+    AccessControl.assignRole(accessControlState, caller, caller, #admin);
+    adminInitialized := true;
+    true;
   };
 };

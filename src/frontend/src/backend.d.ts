@@ -131,6 +131,7 @@ export interface backendInterface {
     getReviewsForProduct(productId: string): Promise<Array<Review>>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    initializeFirstAdmin(pin: string): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     placeOrder(): Promise<string>;

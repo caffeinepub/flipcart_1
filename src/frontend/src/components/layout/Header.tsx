@@ -163,8 +163,8 @@ export function Header() {
                 </Button>
               )}
 
-              {/* Admin Dashboard button */}
-              {isLoggedIn && isAdmin && (
+              {/* Admin Dashboard button - visible to all logged in users */}
+              {isLoggedIn && (
                 <Button
                   className="bg-brand-orange hover:bg-orange-600 text-white gap-1.5 h-10 px-3 font-semibold shadow-sm"
                   asChild
@@ -292,7 +292,7 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
-              {isLoggedIn && isAdmin && (
+              {isLoggedIn && (
                 <>
                   <div className="border-t my-1" />
                   <Link

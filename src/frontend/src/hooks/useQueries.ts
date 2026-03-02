@@ -393,6 +393,21 @@ export function useAssignCallerUserRole() {
   });
 }
 
+export function useInitializeFirstAdmin() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (pin: string) => {
+      if (!actor) throw new Error("Not connected");
+      return actor.initializeFirstAdmin(pin);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+      queryClient.invalidateQueries({ queryKey: ["userRole"] });
+    },
+  });
+}
+
 // ============ REVIEWS ============
 export function useGetReviewsForProduct(productId: string) {
   const { actor, isFetching } = useActor();

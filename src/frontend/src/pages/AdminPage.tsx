@@ -43,10 +43,9 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Category, Order, Product } from "../backend.d";
-import { OrderStatus, UserRole } from "../backend.d";
+import { OrderStatus } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
-  useAssignCallerUserRole,
   useCreateCategory,
   useCreateProduct,
   useDeleteCategory,
@@ -54,6 +53,7 @@ import {
   useGetAllOrders,
   useGetAllProducts,
   useGetCategories,
+  useInitializeFirstAdmin,
   useIsCallerAdmin,
   useUpdateCategory,
   useUpdateOrderStatus,
@@ -80,9 +80,18 @@ const EMPTY_CATEGORY: Category = {
   description: "",
 };
 
-// Hardcoded 4-digit admin PIN
-const ADMIN_PIN = "1234";
+// Hardcoded 4-digit admin PIN (can be changed and stored in localStorage)
+const DEFAULT_PIN = "0078";
+const PIN_STORAGE_KEY = "admin_custom_pin";
 const PIN_SESSION_KEY = "admin_pin_verified";
+
+function getAdminPin(): string {
+  return localStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
+}
+
+function setAdminPin(pin: string): void {
+  localStorage.setItem(PIN_STORAGE_KEY, pin);
+}
 
 function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
   const [pin, setPin] = useState("");
@@ -114,7 +123,7 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
   };
 
   const checkPin = (enteredPin: string) => {
-    if (enteredPin === ADMIN_PIN) {
+    if (enteredPin === getAdminPin()) {
       sessionStorage.setItem(PIN_SESSION_KEY, "true");
       onUnlock();
     } else {
@@ -141,7 +150,7 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
           <Lock className="w-8 h-8 text-brand-orange" />
         </div>
         <h2 className="font-display font-bold text-xl mb-1">Admin PIN</h2>
-        <p className="text-muted-foreground text-sm mb-8">
+        <p className="text-muted-foreground text-sm mb-6">
           4-digit PIN enter karein Admin Dashboard kholne ke liye
         </p>
 
@@ -168,7 +177,7 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
         </motion.div>
 
         {/* Numpad */}
-        <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
+        <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto mb-6">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(
             (key) => (
               <button
@@ -205,6 +214,28 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
             ),
           )}
         </div>
+
+        <button
+          type="button"
+          className="text-xs text-muted-foreground hover:text-brand-orange underline underline-offset-2 transition-colors"
+          onClick={() => {
+            if (
+              confirm(
+                "PIN reset karein? Iske baad default PIN '0078' use karna hoga.",
+              )
+            ) {
+              localStorage.removeItem(PIN_STORAGE_KEY);
+              sessionStorage.removeItem(PIN_SESSION_KEY);
+              toast.success(
+                "PIN reset ho gaya! Ab default PIN '0078' use karein.",
+              );
+              setPin("");
+              setTimeout(() => inputRefs.current[0]?.focus(), 100);
+            }
+          }}
+        >
+          PIN bhool gaye? Reset karein
+        </button>
       </motion.div>
     </div>
   );
@@ -217,10 +248,19 @@ export function AdminPage() {
   const { data: categories, isLoading: categoriesLoading } = useGetCategories();
   const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
   const queryClient = useQueryClient();
-  const assignRole = useAssignCallerUserRole();
+  const initializeFirstAdmin = useInitializeFirstAdmin();
 
   const [pinVerified, setPinVerified] = useState(
     () => sessionStorage.getItem(PIN_SESSION_KEY) === "true",
+  );
+
+  // Change PIN dialog state
+  const [changePinOpen, setChangePinOpen] = useState(false);
+  const [currentPinInput, setCurrentPinInput] = useState("");
+  const [newPinInput, setNewPinInput] = useState("");
+  const [confirmPinInput, setConfirmPinInput] = useState("");
+  const [changePinStep, setChangePinStep] = useState<"verify" | "new">(
+    "verify",
   );
 
   // Claim admin PIN state
@@ -304,7 +344,7 @@ export function AdminPage() {
     };
 
     const handleClaimPin = async (enteredPin: string) => {
-      if (enteredPin !== ADMIN_PIN) {
+      if (enteredPin !== getAdminPin()) {
         setClaimShake(true);
         setClaimPin("");
         claimInputRefs.current[0]?.focus();
@@ -312,18 +352,32 @@ export function AdminPage() {
         toast.error("Galat PIN! Dobara try karein.");
         return;
       }
-      // Correct PIN — attempt to claim admin
+      // Correct PIN — attempt to initialize first admin
       try {
-        const principal = identity!.getPrincipal();
-        await assignRole.mutateAsync({ user: principal, role: UserRole.admin });
-        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-        toast.success("Admin access mil gaya! Dashboard khul raha hai...");
-      } catch {
+        const result = await initializeFirstAdmin.mutateAsync(enteredPin);
+        if (result) {
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          toast.success("Admin access mil gaya! Dashboard khul raha hai...");
+        } else {
+          setClaimPin("");
+          claimInputRefs.current[0]?.focus();
+          toast.error(
+            "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
+          );
+        }
+      } catch (err) {
         setClaimPin("");
         claimInputRefs.current[0]?.focus();
-        toast.error(
-          "Admin access nahi mila. Kisi existing admin se request karein.",
-        );
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("Admin already initialized")) {
+          toast.error(
+            "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
+          );
+        } else {
+          toast.error(
+            "Admin access nahi mila. Kisi existing admin se request karein.",
+          );
+        }
       }
     };
 
@@ -339,7 +393,8 @@ export function AdminPage() {
           </div>
           <h2 className="font-display font-bold text-xl mb-1">Admin Setup</h2>
           <p className="text-muted-foreground text-sm mb-8">
-            Pehli baar admin access claim karne ke liye PIN enter karein
+            Pehli baar admin access lene ke liye PIN enter karein. Agar admin
+            pehle se hai, toh unse contact karein.
           </p>
 
           <motion.div
@@ -360,7 +415,7 @@ export function AdminPage() {
                 onChange={(e) => handleClaimDigit(i, e.target.value)}
                 onKeyDown={(e) => handleClaimKeyDown(i, e)}
                 className="w-14 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none focus:border-brand-orange transition-colors bg-muted/30"
-                disabled={assignRole.isPending}
+                disabled={initializeFirstAdmin.isPending}
               />
             ))}
           </motion.div>
@@ -372,7 +427,7 @@ export function AdminPage() {
                 <button
                   type="button"
                   key={key}
-                  disabled={assignRole.isPending}
+                  disabled={initializeFirstAdmin.isPending}
                   onClick={() => {
                     if (key === "") return;
                     if (key === "⌫") {
@@ -405,7 +460,7 @@ export function AdminPage() {
             )}
           </div>
 
-          {assignRole.isPending && (
+          {initializeFirstAdmin.isPending && (
             <div className="flex items-center justify-center gap-2 text-brand-orange text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
               Admin access de raha hoon...
@@ -523,6 +578,20 @@ export function AdminPage() {
             Manage products, categories, and orders
           </p>
         </div>
+        <Button
+          variant="outline"
+          className="gap-2 text-sm"
+          onClick={() => {
+            setCurrentPinInput("");
+            setNewPinInput("");
+            setConfirmPinInput("");
+            setChangePinStep("verify");
+            setChangePinOpen(true);
+          }}
+        >
+          <Lock className="w-4 h-4" />
+          PIN Reset
+        </Button>
       </div>
 
       {/* Stats cards */}
@@ -1018,6 +1087,134 @@ export function AdminPage() {
               Save Product
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Change PIN Dialog */}
+      <Dialog open={changePinOpen} onOpenChange={setChangePinOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold flex items-center gap-2">
+              <Lock className="w-5 h-5 text-brand-orange" />
+              Admin PIN Reset
+            </DialogTitle>
+          </DialogHeader>
+          {changePinStep === "verify" ? (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Pehle apna current PIN enter karein verify karne ke liye.
+              </p>
+              <div className="space-y-1.5">
+                <Label>Current PIN</Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="••••"
+                  value={currentPinInput}
+                  onChange={(e) =>
+                    setCurrentPinInput(
+                      e.target.value.replace(/\D/g, "").slice(0, 4),
+                    )
+                  }
+                  className="text-center text-xl tracking-widest"
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setChangePinOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-brand-orange hover:bg-orange-600 text-white"
+                  onClick={() => {
+                    if (currentPinInput === getAdminPin()) {
+                      setChangePinStep("new");
+                    } else {
+                      toast.error("Galat PIN! Dobara try karein.");
+                      setCurrentPinInput("");
+                    }
+                  }}
+                  disabled={currentPinInput.length !== 4}
+                >
+                  Verify
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Naya 4-digit PIN set karein.
+              </p>
+              <div className="space-y-1.5">
+                <Label>New PIN</Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="••••"
+                  value={newPinInput}
+                  onChange={(e) =>
+                    setNewPinInput(
+                      e.target.value.replace(/\D/g, "").slice(0, 4),
+                    )
+                  }
+                  className="text-center text-xl tracking-widest"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Confirm New PIN</Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  placeholder="••••"
+                  value={confirmPinInput}
+                  onChange={(e) =>
+                    setConfirmPinInput(
+                      e.target.value.replace(/\D/g, "").slice(0, 4),
+                    )
+                  }
+                  className="text-center text-xl tracking-widest"
+                />
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setChangePinStep("verify")}
+                >
+                  Back
+                </Button>
+                <Button
+                  className="bg-brand-orange hover:bg-orange-600 text-white"
+                  onClick={() => {
+                    if (newPinInput.length !== 4) {
+                      toast.error("PIN exactly 4 digits ka hona chahiye.");
+                      return;
+                    }
+                    if (newPinInput !== confirmPinInput) {
+                      toast.error("Dono PINs match nahi karte!");
+                      setConfirmPinInput("");
+                      return;
+                    }
+                    setAdminPin(newPinInput);
+                    sessionStorage.removeItem(PIN_SESSION_KEY);
+                    toast.success(
+                      "PIN successfully badal gaya! Next time naya PIN use karein.",
+                    );
+                    setChangePinOpen(false);
+                  }}
+                  disabled={
+                    newPinInput.length !== 4 || confirmPinInput.length !== 4
+                  }
+                >
+                  Save New PIN
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
