@@ -81,6 +81,11 @@ export const UserProfile = IDL.Record({
   'address' : IDL.Text,
   'phone' : IDL.Text,
 });
+export const UserEntry = IDL.Record({
+  'principal' : IDL.Principal,
+  'role' : IDL.Text,
+  'profile' : IDL.Opt(UserProfile),
+});
 export const Review = IDL.Record({
   'userId' : IDL.Principal,
   'comment' : IDL.Text,
@@ -158,6 +163,7 @@ export const idlService = IDL.Service({
   'deleteProduct' : IDL.Func([IDL.Text], [], []),
   'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
   'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+  'getAllUsers' : IDL.Func([], [IDL.Vec(UserEntry)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCart' : IDL.Func([], [IDL.Vec(CartItem)], ['query']),
@@ -181,6 +187,7 @@ export const idlService = IDL.Service({
   'removeFromCart' : IDL.Func([IDL.Text], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
   'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
+  'setUserRole' : IDL.Func([IDL.Principal, IDL.Text], [], []),
   'transform' : IDL.Func(
       [TransformationInput],
       [TransformationOutput],
@@ -268,6 +275,11 @@ export const idlFactory = ({ IDL }) => {
     'address' : IDL.Text,
     'phone' : IDL.Text,
   });
+  const UserEntry = IDL.Record({
+    'principal' : IDL.Principal,
+    'role' : IDL.Text,
+    'profile' : IDL.Opt(UserProfile),
+  });
   const Review = IDL.Record({
     'userId' : IDL.Principal,
     'comment' : IDL.Text,
@@ -342,6 +354,7 @@ export const idlFactory = ({ IDL }) => {
     'deleteProduct' : IDL.Func([IDL.Text], [], []),
     'getAllOrders' : IDL.Func([], [IDL.Vec(Order)], ['query']),
     'getAllProducts' : IDL.Func([], [IDL.Vec(Product)], ['query']),
+    'getAllUsers' : IDL.Func([], [IDL.Vec(UserEntry)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCart' : IDL.Func([], [IDL.Vec(CartItem)], ['query']),
@@ -369,6 +382,7 @@ export const idlFactory = ({ IDL }) => {
     'removeFromCart' : IDL.Func([IDL.Text], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
     'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
+    'setUserRole' : IDL.Func([IDL.Principal, IDL.Text], [], []),
     'transform' : IDL.Func(
         [TransformationInput],
         [TransformationOutput],

@@ -52,6 +52,44 @@ actor {
     userProfiles.add(caller, profile);
   };
 
+  public type UserEntry = {
+    principal : Principal;
+    profile : ?UserProfile;
+    role : Text;
+  };
+
+  public query ({ caller }) func getAllUsers() : async [UserEntry] {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+
+    userProfiles.toArray().map(
+      func((principal, profile)) {
+        let role = if (AccessControl.isAdmin(accessControlState, principal)) {
+          "admin";
+        } else {
+          "user";
+        };
+        {
+          principal;
+          profile = ?profile;
+          role;
+        };
+      }
+    );
+  };
+
+  public shared ({ caller }) func setUserRole(targetUser : Principal, newRole : Text) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can perform this action");
+    };
+    if (newRole == "admin") {
+      AccessControl.assignRole(accessControlState, caller, targetUser, #admin);
+    } else {
+      AccessControl.assignRole(accessControlState, caller, targetUser, #user);
+    };
+  };
+
   // 2. Product Management
   public type Product = {
     id : Text;

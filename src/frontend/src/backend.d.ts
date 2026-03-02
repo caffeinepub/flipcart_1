@@ -56,6 +56,11 @@ export interface StatusHistory {
     status: OrderStatus;
     timestamp: Time;
 }
+export interface UserEntry {
+    principal: Principal;
+    role: string;
+    profile?: UserProfile;
+}
 export interface ShoppingItem {
     productName: string;
     currency: string;
@@ -119,6 +124,7 @@ export interface backendInterface {
     deleteProduct(productId: string): Promise<void>;
     getAllOrders(): Promise<Array<Order>>;
     getAllProducts(): Promise<Array<Product>>;
+    getAllUsers(): Promise<Array<UserEntry>>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCart(): Promise<Array<CartItem>>;
@@ -138,6 +144,7 @@ export interface backendInterface {
     removeFromCart(productId: string): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
+    setUserRole(targetUser: Principal, newRole: string): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
     updateCartItemQuantity(productId: string, quantity: bigint): Promise<void>;
     updateCategory(category: Category): Promise<void>;

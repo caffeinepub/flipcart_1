@@ -8,6 +8,7 @@ import type {
   Product,
   Review,
   ShoppingItem,
+  UserEntry,
   UserProfile,
   UserRole,
 } from "../backend.d";
@@ -363,6 +364,8 @@ export function useIsCallerAdmin() {
       }
     },
     enabled: !!actor && !isFetching,
+    retry: 2,
+    retryDelay: 1000,
   });
 }
 
@@ -404,6 +407,43 @@ export function useInitializeFirstAdmin() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
       queryClient.invalidateQueries({ queryKey: ["userRole"] });
+    },
+  });
+}
+
+// ============ USER MANAGEMENT ============
+export function useGetAllUsers() {
+  const { actor, isFetching } = useActor();
+  return useQuery<UserEntry[]>({
+    queryKey: ["allUsers"],
+    queryFn: async () => {
+      if (!actor) return [];
+      try {
+        return await actor.getAllUsers();
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching,
+  });
+}
+
+export function useSetUserRole() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      targetUser,
+      newRole,
+    }: {
+      targetUser: Principal;
+      newRole: string;
+    }) => {
+      if (!actor) throw new Error("Not connected");
+      await actor.setUserRole(targetUser, newRole);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["allUsers"] });
     },
   });
 }

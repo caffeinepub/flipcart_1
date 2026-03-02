@@ -42,7 +42,7 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Category, Order, Product } from "../backend.d";
+import type { Category, Order, Product, UserEntry } from "../backend.d";
 import { OrderStatus } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
@@ -52,9 +52,11 @@ import {
   useDeleteProduct,
   useGetAllOrders,
   useGetAllProducts,
+  useGetAllUsers,
   useGetCategories,
   useInitializeFirstAdmin,
   useIsCallerAdmin,
+  useSetUserRole,
   useUpdateCategory,
   useUpdateOrderStatus,
   useUpdateProduct,
@@ -84,6 +86,8 @@ const EMPTY_CATEGORY: Category = {
 const DEFAULT_PIN = "0078";
 const PIN_STORAGE_KEY = "admin_custom_pin";
 const PIN_SESSION_KEY = "admin_pin_verified";
+// Backend internal PIN — do not change without updating backend
+const BACKEND_SETUP_PIN = "1234";
 
 function getAdminPin(): string {
   return localStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
@@ -134,6 +138,14 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
       toast.error("Galat PIN! Dobara try karein.");
     }
   };
+
+  // Migrate old PIN "1234" to default "0078"
+  useEffect(() => {
+    const stored = localStorage.getItem(PIN_STORAGE_KEY);
+    if (stored === "1234") {
+      localStorage.removeItem(PIN_STORAGE_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     inputRefs.current[0]?.focus();
@@ -247,12 +259,22 @@ export function AdminPage() {
   const { data: products, isLoading: productsLoading } = useGetAllProducts();
   const { data: categories, isLoading: categoriesLoading } = useGetCategories();
   const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
+  const { data: users, isLoading: usersLoading } = useGetAllUsers();
   const queryClient = useQueryClient();
   const initializeFirstAdmin = useInitializeFirstAdmin();
+  const setUserRole = useSetUserRole();
 
   const [pinVerified, setPinVerified] = useState(
     () => sessionStorage.getItem(PIN_SESSION_KEY) === "true",
   );
+
+  // Migrate old PIN "1234" to default "0078"
+  useEffect(() => {
+    const stored = localStorage.getItem(PIN_STORAGE_KEY);
+    if (stored === "1234") {
+      localStorage.removeItem(PIN_STORAGE_KEY);
+    }
+  }, []);
 
   // Change PIN dialog state
   const [changePinOpen, setChangePinOpen] = useState(false);
@@ -352,31 +374,51 @@ export function AdminPage() {
         toast.error("Galat PIN! Dobara try karein.");
         return;
       }
-      // Correct PIN — attempt to initialize first admin
+
       try {
-        const result = await initializeFirstAdmin.mutateAsync(enteredPin);
-        if (result) {
-          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          toast.success("Admin access mil gaya! Dashboard khul raha hai...");
-        } else {
-          setClaimPin("");
-          claimInputRefs.current[0]?.focus();
-          toast.error(
-            "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
-          );
-        }
+        // First try to initialize as first admin
+        await initializeFirstAdmin.mutateAsync(BACKEND_SETUP_PIN);
+        // Success — invalidate and refetch
+        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+        await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+        toast.success("Admin access mil gaya! Dashboard khul raha hai...");
       } catch (err) {
-        setClaimPin("");
-        claimInputRefs.current[0]?.focus();
         const message = err instanceof Error ? err.message : String(err);
-        if (message.includes("Admin already initialized")) {
-          toast.error(
-            "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
-          );
+
+        if (
+          message.includes("already") ||
+          message.includes("initialized") ||
+          message.includes("Admin already")
+        ) {
+          // Admin already set — this user might already be admin, force refresh
+          toast.info("Check kar raha hoon...");
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+          // Check if the refetch returned true
+          const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
+          if (isAdminNow) {
+            toast.success("Admin access confirm hua!");
+          } else {
+            setClaimPin("");
+            claimInputRefs.current[0]?.focus();
+            toast.error(
+              "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
+            );
+          }
+        } else if (message.includes("anonymous")) {
+          toast.error("Pehle login karein, phir admin access lein.");
         } else {
-          toast.error(
-            "Admin access nahi mila. Kisi existing admin se request karein.",
-          );
+          // Unknown error — still try refreshing admin status
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+          const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
+          if (isAdminNow) {
+            toast.success("Admin access confirm hua!");
+          } else {
+            setClaimPin("");
+            claimInputRefs.current[0]?.focus();
+            toast.error(`Admin access nahi mila: ${message.slice(0, 80)}`);
+          }
         }
       }
     };
@@ -469,7 +511,19 @@ export function AdminPage() {
 
           <button
             type="button"
-            className="text-xs text-muted-foreground hover:text-brand-orange underline underline-offset-2 transition-colors mt-2"
+            className="text-sm text-brand-orange underline underline-offset-2 mt-3 block"
+            onClick={async () => {
+              await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+              await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+              toast.info("Admin status check ho raha hai...");
+            }}
+          >
+            Pehle se admin hain? Yahan click karein
+          </button>
+
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-brand-orange underline underline-offset-2 transition-colors mt-2 block"
             onClick={() => {
               if (
                 confirm(
@@ -616,7 +670,7 @@ export function AdminPage() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         {[
           {
             label: "Total Products",
@@ -641,6 +695,12 @@ export function AdminPage() {
             value: pendingOrders,
             icon: TrendingUp,
             color: "text-orange-600 bg-orange-50",
+          },
+          {
+            label: "Total Users",
+            value: users?.length ?? 0,
+            icon: Users,
+            color: "text-teal-600 bg-teal-50",
           },
         ].map((stat) => (
           <motion.div
@@ -671,6 +731,9 @@ export function AdminPage() {
           </TabsTrigger>
           <TabsTrigger value="orders">
             <ShoppingBag className="w-4 h-4 mr-2" /> Orders
+          </TabsTrigger>
+          <TabsTrigger value="users">
+            <Users className="w-4 h-4 mr-2" /> Users
           </TabsTrigger>
         </TabsList>
 
@@ -960,6 +1023,146 @@ export function AdminPage() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Users tab */}
+        <TabsContent value="users">
+          <h2 className="font-display font-semibold text-lg mb-4">
+            User Management
+          </h2>
+          {usersLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-16 rounded-xl" />
+              ))}
+            </div>
+          ) : !users || users.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-xl border border-border">
+              <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-30" />
+              <p className="text-muted-foreground text-sm">No users found</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">
+                      User (Principal)
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden md:table-cell">
+                      Name
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">
+                      Email
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground hidden lg:table-cell">
+                      Phone
+                    </th>
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">
+                      Role
+                    </th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {users.map((entry: UserEntry) => {
+                    const principalStr = entry.principal.toString();
+                    const isSelf =
+                      identity?.getPrincipal().toString() === principalStr;
+                    const isEntryAdmin = entry.role === "admin";
+                    const isRolePending =
+                      setUserRole.isPending &&
+                      setUserRole.variables?.targetUser.toString() ===
+                        principalStr;
+                    return (
+                      <tr key={principalStr} className="hover:bg-muted/50">
+                        <td className="px-4 py-3">
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {principalStr.slice(0, 16)}...
+                          </p>
+                          {isSelf && (
+                            <span className="text-[10px] font-semibold text-brand-orange">
+                              (You)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <p className="font-medium">
+                            {entry.profile?.name || (
+                              <span className="text-muted-foreground italic">
+                                —
+                              </span>
+                            )}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">
+                          {entry.profile?.email || "—"}
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground">
+                          {entry.profile?.phone || "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={
+                              isEntryAdmin
+                                ? "bg-orange-100 text-orange-700 border-orange-200"
+                                : "bg-muted text-muted-foreground border-border"
+                            }
+                          >
+                            {entry.role}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end">
+                            {isSelf ? (
+                              <span className="text-xs text-muted-foreground italic px-2">
+                                Cannot change own role
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className={
+                                  isEntryAdmin
+                                    ? "text-xs h-7 border-red-200 text-red-600 hover:bg-red-50"
+                                    : "text-xs h-7 border-teal-200 text-teal-700 hover:bg-teal-50"
+                                }
+                                disabled={isRolePending}
+                                onClick={async () => {
+                                  const newRole = isEntryAdmin
+                                    ? "user"
+                                    : "admin";
+                                  try {
+                                    await setUserRole.mutateAsync({
+                                      targetUser: entry.principal,
+                                      newRole,
+                                    });
+                                    toast.success(
+                                      `${entry.profile?.name || principalStr.slice(0, 8)} ab ${newRole} hai`,
+                                    );
+                                  } catch {
+                                    toast.error("Role update nahi hua");
+                                  }
+                                }}
+                              >
+                                {isRolePending ? (
+                                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                                ) : null}
+                                {isEntryAdmin ? "Remove Admin" : "Make Admin"}
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

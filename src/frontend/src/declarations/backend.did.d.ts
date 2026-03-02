@@ -78,6 +78,11 @@ export interface TransformationOutput {
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
+export interface UserEntry {
+  'principal' : Principal,
+  'role' : string,
+  'profile' : [] | [UserProfile],
+}
 export interface UserProfile {
   'name' : string,
   'email' : string,
@@ -134,6 +139,7 @@ export interface _SERVICE {
   'deleteProduct' : ActorMethod<[string], undefined>,
   'getAllOrders' : ActorMethod<[], Array<Order>>,
   'getAllProducts' : ActorMethod<[], Array<Product>>,
+  'getAllUsers' : ActorMethod<[], Array<UserEntry>>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCart' : ActorMethod<[], Array<CartItem>>,
@@ -153,6 +159,7 @@ export interface _SERVICE {
   'removeFromCart' : ActorMethod<[string], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
+  'setUserRole' : ActorMethod<[Principal, string], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
   'updateCartItemQuantity' : ActorMethod<[string, bigint], undefined>,
   'updateCategory' : ActorMethod<[Category], undefined>,
