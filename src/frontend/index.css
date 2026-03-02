@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/assets/fonts/CabinetGrotesk-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Satoshi";
+  src: url("/assets/fonts/Satoshi-Variable.woff2") format("woff2");
+  font-weight: 300 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+
+    /* ShopEasy Brand: Deep Navy + Vibrant Orange + Clean White */
+    --background: 0.98 0.003 75;
+    --foreground: 0.15 0.02 260;
+    --card: 1 0 0;
+    --card-foreground: 0.15 0.02 260;
+    --popover: 1 0 0;
+    --popover-foreground: 0.15 0.02 260;
+
+    /* Primary: Deep Navy Blue */
+    --primary: 0.25 0.08 260;
+    --primary-foreground: 0.98 0 0;
+
+    /* Secondary: Vibrant Orange */
+    --secondary: 0.72 0.19 45;
+    --secondary-foreground: 0.98 0 0;
+
+    /* Muted */
+    --muted: 0.94 0.008 260;
+    --muted-foreground: 0.52 0.02 260;
+
+    /* Accent: Orange */
+    --accent: 0.72 0.19 45;
+    --accent-foreground: 0.98 0 0;
+
+    /* Brand Orange for CTAs */
+    --brand-orange: 0.72 0.19 45;
+    --brand-navy: 0.25 0.08 260;
+    --brand-orange-light: 0.96 0.06 75;
+    --brand-gold: 0.78 0.16 85;
+
+    --destructive: 0.577 0.245 27.325;
+    --destructive-foreground: 0.985 0 0;
+    --success: 0.65 0.18 145;
+    --success-foreground: 0.98 0 0;
+    --warning: 0.78 0.16 85;
+    --warning-foreground: 0.15 0.02 260;
+
+    --border: 0.90 0.008 260;
+    --input: 0.92 0.008 260;
+    --ring: 0.72 0.19 45;
+
+    --chart-1: 0.72 0.19 45;
+    --chart-2: 0.25 0.08 260;
+    --chart-3: 0.65 0.18 145;
+    --chart-4: 0.78 0.16 85;
+    --chart-5: 0.577 0.245 27.325;
+
+    --sidebar: 0.25 0.08 260;
+    --sidebar-foreground: 0.98 0 0;
+    --sidebar-primary: 0.72 0.19 45;
+    --sidebar-primary-foreground: 0.98 0 0;
+    --sidebar-accent: 0.20 0.06 260;
+    --sidebar-accent-foreground: 0.98 0 0;
+    --sidebar-border: 0.32 0.06 260;
+    --sidebar-ring: 0.72 0.19 45;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Satoshi", "Cabinet Grotesk", sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Cabinet Grotesk", "Satoshi", sans-serif;
+  }
+}
+
+@layer utilities {
+  .brand-gradient {
+    background: linear-gradient(135deg, oklch(0.25 0.08 260), oklch(0.35 0.12 250));
+  }
+
+  .orange-gradient {
+    background: linear-gradient(135deg, oklch(0.72 0.19 45), oklch(0.78 0.16 55));
+  }
+
+  .text-brand-orange {
+    color: oklch(var(--brand-orange));
+  }
+
+  .text-brand-navy {
+    color: oklch(var(--brand-navy));
+  }
+
+  .bg-brand-orange {
+    background-color: oklch(var(--brand-orange));
+  }
+
+  .bg-brand-navy {
+    background-color: oklch(var(--brand-navy));
+  }
+
+  .bg-brand-orange-light {
+    background-color: oklch(var(--brand-orange-light));
+  }
+
+  .border-brand-orange {
+    border-color: oklch(var(--brand-orange));
+  }
+
+  .product-card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  }
+
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
