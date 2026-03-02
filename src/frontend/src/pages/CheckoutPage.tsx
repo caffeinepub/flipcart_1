@@ -12,7 +12,9 @@ import {
   MapPin,
   Package,
   Shield,
+  Smartphone,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { ShoppingItem } from "../backend.d";
@@ -32,6 +34,8 @@ import {
   getProductImage,
 } from "../utils/staticData";
 
+type PaymentMethod = "skypay" | "card";
+
 export function CheckoutPage() {
   const search = useSearch({ from: "/checkout" });
   const sessionId = (search as { session_id?: string }).session_id;
@@ -42,7 +46,7 @@ export function CheckoutPage() {
   const { data: backendProducts } = useGetAllProducts();
   const { data: userProfile } = useGetCallerUserProfile();
   const createCheckout = useCreateCheckoutSession();
-  const _placeOrder = usePlaceOrder();
+  const placeOrder = usePlaceOrder();
 
   const { data: stripeStatus } = useGetStripeSessionStatus(sessionId ?? "");
 
@@ -61,6 +65,9 @@ export function CheckoutPage() {
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("skypay");
+  const [upiId, setUpiId] = useState("");
+  const [skyPayOrderId, setSkyPayOrderId] = useState<string | null>(null);
 
   // Handle post-Stripe redirect
   if (sessionId && stripeStatus) {
@@ -91,6 +98,11 @@ export function CheckoutPage() {
         </div>
       );
     }
+  }
+
+  // Sky Pay success screen
+  if (skyPayOrderId) {
+    return <SkyPaySuccessView orderId={skyPayOrderId} />;
   }
 
   if (!identity) {
@@ -135,7 +147,7 @@ export function CheckoutPage() {
     );
   }
 
-  const handleCheckout = async () => {
+  const validateAddress = () => {
     if (
       !address.name ||
       !address.phone ||
@@ -144,8 +156,13 @@ export function CheckoutPage() {
       !address.pincode
     ) {
       toast.error("Please fill in all address fields");
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleCheckout = async () => {
+    if (!validateAddress()) return;
 
     setIsProcessing(true);
     try {
@@ -156,7 +173,7 @@ export function CheckoutPage() {
           productDescription: product?.description?.slice(0, 100) ?? "",
           currency: "inr",
           quantity: item.quantity,
-          priceInCents: item.price * 100n, // Convert rupees to paise
+          priceInCents: item.price * 100n,
         };
       });
 
@@ -171,6 +188,28 @@ export function CheckoutPage() {
       window.location.href = checkoutUrl;
     } catch {
       toast.error("Failed to create checkout session. Please try again.");
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSkyPay = async () => {
+    if (!validateAddress()) return;
+    if (!upiId.trim()) {
+      toast.error("Please enter your UPI ID");
+      return;
+    }
+    if (!upiId.includes("@")) {
+      toast.error("Please enter a valid UPI ID (e.g. name@skypay)");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const id = await placeOrder.mutateAsync();
+      setSkyPayOrderId(id);
+    } catch {
+      toast.error("Payment failed. Please try again.");
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -333,30 +372,193 @@ export function CheckoutPage() {
               </span>
             </div>
 
-            <Button
-              className="w-full bg-brand-orange hover:bg-orange-600 text-white font-bold h-12 text-base gap-2"
-              onClick={() => void handleCheckout()}
-              disabled={isProcessing || createCheckout.isPending}
-            >
-              {isProcessing || createCheckout.isPending ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> Processing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5" /> Pay {formatPrice(total)}
-                </>
-              )}
-            </Button>
+            {/* Payment Method Selector */}
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground mb-3">
+                Choose Payment Method
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Sky Pay option */}
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setPaymentMethod("skypay")}
+                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                    paymentMethod === "skypay"
+                      ? "border-sky-500 bg-sky-50 shadow-sm"
+                      : "border-border bg-background hover:border-sky-300 hover:bg-sky-50/50"
+                  }`}
+                  aria-pressed={paymentMethod === "skypay"}
+                  aria-label="Pay with Sky Pay"
+                >
+                  {paymentMethod === "skypay" && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sky-500" />
+                  )}
+                  {/* Sky Pay Logo Badge */}
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-500 shadow-sm">
+                    <Smartphone className="w-4 h-4 text-white" />
+                  </div>
+                  <span
+                    className={`text-xs font-bold tracking-wide ${
+                      paymentMethod === "skypay"
+                        ? "text-sky-600"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    SKY PAY
+                  </span>
+                </motion.button>
+
+                {/* Card option */}
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setPaymentMethod("card")}
+                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                    paymentMethod === "card"
+                      ? "border-brand-orange bg-orange-50 shadow-sm"
+                      : "border-border bg-background hover:border-orange-300 hover:bg-orange-50/50"
+                  }`}
+                  aria-pressed={paymentMethod === "card"}
+                  aria-label="Pay by Card"
+                >
+                  {paymentMethod === "card" && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
+                  )}
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-orange shadow-sm">
+                    <CreditCard className="w-4 h-4 text-white" />
+                  </div>
+                  <span
+                    className={`text-xs font-bold tracking-wide ${
+                      paymentMethod === "card"
+                        ? "text-brand-orange"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    PAY BY CARD
+                  </span>
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Sky Pay UPI Input */}
+            {paymentMethod === "skypay" && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mb-4"
+              >
+                <Label
+                  htmlFor="upi-id"
+                  className="text-xs font-semibold text-sky-700 mb-1.5 block"
+                >
+                  UPI ID
+                </Label>
+                <Input
+                  id="upi-id"
+                  placeholder="Enter UPI ID (e.g. name@skypay)"
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  className="border-sky-200 focus-visible:ring-sky-400 text-sm"
+                  autoComplete="off"
+                />
+              </motion.div>
+            )}
+
+            {/* Pay Button */}
+            {paymentMethod === "skypay" ? (
+              <Button
+                className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold h-12 text-base gap-2 transition-colors"
+                onClick={() => void handleSkyPay()}
+                disabled={isProcessing || placeOrder.isPending}
+              >
+                {isProcessing || placeOrder.isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-5 h-5" /> Pay with Sky Pay
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button
+                className="w-full bg-brand-orange hover:bg-orange-600 text-white font-bold h-12 text-base gap-2"
+                onClick={() => void handleCheckout()}
+                disabled={isProcessing || createCheckout.isPending}
+              >
+                {isProcessing || createCheckout.isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-5 h-5" /> Pay via Card
+                  </>
+                )}
+              </Button>
+            )}
 
             <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Shield className="w-3 h-3" />
-              Secure payment by Stripe
+              {paymentMethod === "skypay"
+                ? "Secure payment by Sky Pay"
+                : "Secure payment by Stripe"}
             </div>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function SkyPaySuccessView({ orderId }: { orderId: string }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="container mx-auto px-4 py-20 text-center">
+      <div className="max-w-md mx-auto">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+        >
+          <CheckCircle2 className="w-20 h-20 text-green-600 mx-auto mb-4" />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="inline-flex items-center gap-2 bg-sky-100 text-sky-700 font-bold text-sm px-3 py-1.5 rounded-full mb-4">
+            <Smartphone className="w-4 h-4" />
+            Sky Pay
+          </div>
+          <h2 className="font-display font-bold text-2xl mb-2">
+            Payment Successful via Sky Pay!
+          </h2>
+          <p className="text-muted-foreground mb-2">Your Order ID:</p>
+          <p className="font-mono font-bold text-brand-navy text-sm bg-muted px-3 py-1.5 rounded-lg inline-block mb-6">
+            {orderId}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button
+              className="bg-sky-500 hover:bg-sky-600 text-white"
+              onClick={() =>
+                void navigate({ to: "/order/$orderId", params: { orderId } })
+              }
+            >
+              Track Order
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/products" search={{}}>
+                Continue Shopping
+              </Link>
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    </div>
   );
 }
 
