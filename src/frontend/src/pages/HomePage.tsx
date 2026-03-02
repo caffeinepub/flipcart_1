@@ -228,7 +228,7 @@ export function HomePage() {
             All Categories <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-3">
           {STATIC_CATEGORIES.map((cat, i) => (
             <motion.div
               key={cat.id}

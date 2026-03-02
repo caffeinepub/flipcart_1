@@ -8,12 +8,15 @@ import Text "mo:core/Text";
 import Blob "mo:core/Blob";
 import Principal "mo:core/Principal";
 import Runtime "mo:core/Runtime";
+import Nat "mo:core/Nat";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import OutCall "http-outcalls/outcall";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import Stripe "stripe/stripe";
+
+
 
 actor {
   include MixinStorage();
@@ -321,7 +324,7 @@ actor {
     };
 
     orderCounter += 1;
-    let orderId = "ORDER-" # Nat.toText(orderCounter);
+    let orderId = "ORDER-" # orderCounter.toText();
     let now = Time.now();
 
     let order : Order = {
@@ -488,7 +491,13 @@ actor {
     };
 
     // If caller is already admin, return true
-    if (AccessControl.isAdmin(accessControlState, caller)) {
+    // We need to check this safely without trapping
+    let isAlreadyAdmin = switch (accessControlState.userRoles.get(caller)) {
+      case (? #admin) { true };
+      case (_) { false };
+    };
+
+    if (isAlreadyAdmin) {
       return true;
     };
 
@@ -497,8 +506,9 @@ actor {
       Runtime.trap("Admin already initialized. Contact existing admin for access.");
     };
 
-    // Set caller as admin and mark as initialized
-    AccessControl.assignRole(accessControlState, caller, caller, #admin);
+    // Set caller as admin directly in the state and mark as initialized
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
     adminInitialized := true;
     true;
   };

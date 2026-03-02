@@ -1,10 +1,11 @@
+import { ExternalBlob } from "../backend";
 import type { Category, Product } from "../backend.d";
 
 export const STATIC_CATEGORIES: Category[] = [
   {
-    id: "electronics",
-    name: "Electronics",
-    description: "Smartphones, laptops, gadgets and more",
+    id: "grocery",
+    name: "Grocery",
+    description: "Fresh produce, daily essentials and beverages",
   },
   {
     id: "fashion",
@@ -12,34 +13,84 @@ export const STATIC_CATEGORIES: Category[] = [
     description: "Clothing, footwear and accessories",
   },
   {
-    id: "home-furniture",
-    name: "Home & Furniture",
-    description: "Furniture, decor and appliances",
+    id: "appliance",
+    name: "Appliance",
+    description: "Home appliances, kitchen and laundry",
   },
   {
-    id: "sports",
-    name: "Sports & Outdoors",
-    description: "Sports gear, fitness equipment",
+    id: "mobile",
+    name: "Mobile",
+    description: "Smartphones, accessories and recharges",
   },
   {
-    id: "books",
-    name: "Books",
-    description: "Fiction, non-fiction, academic and more",
+    id: "electronics",
+    name: "Electronics",
+    description: "Laptops, TVs, cameras and gadgets",
   },
   {
-    id: "beauty",
-    name: "Beauty & Health",
-    description: "Skincare, makeup, wellness",
+    id: "smart-gadgets",
+    name: "Smart Gadgets",
+    description: "Smartwatches, earbuds, IoT devices",
   },
   {
-    id: "groceries",
-    name: "Groceries",
-    description: "Fresh produce, snacks and beverages",
+    id: "home",
+    name: "Home",
+    description: "Home decor, furnishings and kitchenware",
   },
   {
-    id: "toys",
-    name: "Toys & Games",
-    description: "Toys, board games and learning kits",
+    id: "beauty-baby",
+    name: "Beauty & Baby Care",
+    description: "Skincare, makeup, baby products and care",
+  },
+  {
+    id: "food-healthcare",
+    name: "Food & Healthcare",
+    description: "Health foods, medicines and wellness",
+  },
+  {
+    id: "sports-fitness",
+    name: "Sports & Fitness",
+    description: "Sports gear, gym equipment and activewear",
+  },
+  {
+    id: "auto-accessories",
+    name: "Auto Accessories",
+    description: "Car and bike accessories and spare parts",
+  },
+  {
+    id: "furniture",
+    name: "Furniture",
+    description: "Sofas, beds, tables and storage",
+  },
+  {
+    id: "bike-scooter",
+    name: "Bike & Scooter",
+    description: "Cycles, scooters, e-bikes and accessories",
+  },
+  {
+    id: "travel",
+    name: "Travel",
+    description: "Luggage, travel gear and holiday essentials",
+  },
+  {
+    id: "books-media",
+    name: "Books & Media",
+    description: "Books, music, movies and stationery",
+  },
+  {
+    id: "gift-card",
+    name: "Gift Card",
+    description: "Gift cards and vouchers for any occasion",
+  },
+  {
+    id: "sell-old-device",
+    name: "Sell / Exchange Old Device",
+    description: "Sell or exchange your old phones and gadgets",
+  },
+  {
+    id: "home-service",
+    name: "Home Service",
+    description: "Plumbing, cleaning, repairs and more at home",
   },
 ];
 
@@ -90,7 +141,7 @@ export const STATIC_PRODUCTS: Product[] = [
       "Solid teak wood construction with natural oil finish. Minimalist design with lower shelf for storage. 120x60x45cm.",
     price: 18999n,
     discountedPrice: 13999n,
-    category: "home-furniture",
+    category: "furniture",
     stockQuantity: 30n,
     rating: 4.6,
     reviewCount: 387n,
@@ -103,7 +154,7 @@ export const STATIC_PRODUCTS: Product[] = [
       "Responsive cushioning, breathable mesh upper, durable outsole. Ideal for everyday running and training.",
     price: 10795n,
     discountedPrice: 8599n,
-    category: "sports",
+    category: "sports-fitness",
     stockQuantity: 200n,
     rating: 4.5,
     reviewCount: 3012n,
@@ -142,7 +193,7 @@ export const STATIC_PRODUCTS: Product[] = [
       "Non-slip TPE material, 183x61cm, eco-friendly, includes carry strap. Perfect grip for all yoga styles.",
     price: 2499n,
     discountedPrice: 1599n,
-    category: "sports",
+    category: "sports-fitness",
     stockQuantity: 180n,
     rating: 4.4,
     reviewCount: 672n,
@@ -151,14 +202,24 @@ export const STATIC_PRODUCTS: Product[] = [
 ];
 
 export const CATEGORY_ICONS: Record<string, string> = {
-  electronics: "📱",
+  grocery: "🛒",
   fashion: "👗",
-  "home-furniture": "🛋️",
-  sports: "⚽",
-  books: "📚",
-  beauty: "💄",
-  groceries: "🛒",
-  toys: "🎮",
+  appliance: "🏠",
+  mobile: "📱",
+  electronics: "💻",
+  "smart-gadgets": "⌚",
+  home: "🛋️",
+  "beauty-baby": "💄",
+  "food-healthcare": "💊",
+  "sports-fitness": "⚽",
+  "auto-accessories": "🚗",
+  furniture: "🪑",
+  "bike-scooter": "🛵",
+  travel: "✈️",
+  "books-media": "📚",
+  "gift-card": "🎁",
+  "sell-old-device": "♻️",
+  "home-service": "🔧",
 };
 
 export const PRODUCT_IMAGES: Record<string, string> = {
@@ -173,6 +234,16 @@ export const PRODUCT_IMAGES: Record<string, string> = {
 };
 
 export function getProductImage(product: Product): string {
+  // If product has uploaded images, use ExternalBlob to get a URL
+  if (
+    product.images &&
+    product.images.length > 0 &&
+    product.images[0].length > 0
+  ) {
+    return ExternalBlob.fromBytes(
+      product.images[0] as Uint8Array<ArrayBuffer>,
+    ).getDirectURL();
+  }
   if (PRODUCT_IMAGES[product.id]) return PRODUCT_IMAGES[product.id];
   // Generate a deterministic picsum seed from product id
   const seed = product.id

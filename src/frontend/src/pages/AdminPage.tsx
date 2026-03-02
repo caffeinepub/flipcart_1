@@ -26,6 +26,7 @@ import {
   BarChart3,
   Delete,
   Edit3,
+  ImagePlus,
   Loader2,
   Lock,
   Package,
@@ -36,12 +37,14 @@ import {
   Tag,
   Trash2,
   TrendingUp,
+  Upload,
   Users,
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ExternalBlob } from "../backend";
 import type { Category, Order, Product, UserEntry } from "../backend.d";
 import { OrderStatus } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -314,6 +317,8 @@ export function AdminPage() {
   });
   const [productForm, setProductForm] = useState<Product>(EMPTY_PRODUCT);
   const [categoryForm, setCategoryForm] = useState<Category>(EMPTY_CATEGORY);
+  // Image preview URLs for newly selected files (object URLs) and existing images (ExternalBlob URLs)
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
 
   if (!identity) {
     return (
@@ -378,7 +383,8 @@ export function AdminPage() {
       try {
         // First try to initialize as first admin
         await initializeFirstAdmin.mutateAsync(BACKEND_SETUP_PIN);
-        // Success — invalidate and refetch
+        // Wait a moment for canister state to propagate
+        await new Promise((resolve) => setTimeout(resolve, 800));
         await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
         await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
         toast.success("Admin access mil gaya! Dashboard khul raha hai...");
@@ -391,7 +397,8 @@ export function AdminPage() {
           message.includes("Admin already")
         ) {
           // Admin already set — this user might already be admin, force refresh
-          toast.info("Check kar raha hoon...");
+          toast.info("Admin status check ho raha hai...");
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
           await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
           // Check if the refetch returned true
@@ -435,8 +442,11 @@ export function AdminPage() {
           </div>
           <h2 className="font-display font-bold text-xl mb-1">Admin Setup</h2>
           <p className="text-muted-foreground text-sm mb-8">
-            Pehli baar admin access lene ke liye PIN enter karein. Agar admin
-            pehle se hai, toh unse contact karein.
+            Admin PIN{" "}
+            <span className="font-mono font-semibold text-brand-orange">
+              0078
+            </span>{" "}
+            enter karein. Agar pehla admin ho to yahi PIN use hoga.
           </p>
 
           <motion.div
@@ -513,9 +523,10 @@ export function AdminPage() {
             type="button"
             className="text-sm text-brand-orange underline underline-offset-2 mt-3 block"
             onClick={async () => {
+              toast.info("Admin status check ho raha hai...");
+              await new Promise((resolve) => setTimeout(resolve, 800));
               await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
               await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
-              toast.info("Admin status check ho raha hai...");
             }}
           >
             Pehle se admin hain? Yahan click karein
@@ -564,7 +575,19 @@ export function AdminPage() {
     orders?.filter((o) => o.status === OrderStatus.Pending).length ?? 0;
 
   const openProductDialog = (product: Product | null) => {
-    setProductForm(product ?? { ...EMPTY_PRODUCT, id: crypto.randomUUID() });
+    const form = product ?? { ...EMPTY_PRODUCT, id: crypto.randomUUID() };
+    setProductForm(form);
+    // Build preview URLs for existing product images
+    if (product?.images && product.images.length > 0) {
+      const previews = product.images
+        .filter((img) => img.length > 0)
+        .map((img) =>
+          ExternalBlob.fromBytes(img as Uint8Array<ArrayBuffer>).getDirectURL(),
+        );
+      setImagePreviewUrls(previews);
+    } else {
+      setImagePreviewUrls([]);
+    }
     setProductDialog({ open: true, product });
   };
 
@@ -1289,6 +1312,102 @@ export function AdminPage() {
                   })
                 }
               />
+            </div>
+
+            {/* Image Upload Section */}
+            <div className="sm:col-span-2 space-y-3">
+              <Label className="flex items-center gap-1.5">
+                <ImagePlus className="w-4 h-4 text-brand-orange" />
+                Product Images
+                <span className="text-xs text-muted-foreground font-normal ml-1">
+                  (max 3 images — JPG, PNG, WebP)
+                </span>
+              </Label>
+
+              {/* Image previews */}
+              {imagePreviewUrls.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  {imagePreviewUrls.map((url, idx) => (
+                    <div
+                      key={url}
+                      className="relative w-24 h-24 rounded-xl overflow-hidden border-2 border-border group"
+                    >
+                      <img
+                        src={url}
+                        alt={`Product view ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newImages = productForm.images.filter(
+                            (_, i) => i !== idx,
+                          );
+                          setProductForm({ ...productForm, images: newImages });
+                          setImagePreviewUrls((prev) =>
+                            prev.filter((_, i) => i !== idx),
+                          );
+                        }}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      <div className="absolute bottom-1 left-1 text-[10px] bg-black/50 text-white px-1 rounded">
+                        {idx + 1}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload button */}
+              {imagePreviewUrls.length < 3 && (
+                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-brand-orange hover:bg-brand-orange/5 transition-all group">
+                  <Upload className="w-6 h-6 text-muted-foreground group-hover:text-brand-orange mb-1.5 transition-colors" />
+                  <span className="text-sm text-muted-foreground group-hover:text-brand-orange transition-colors font-medium">
+                    Click to upload images
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5">
+                    {3 - imagePreviewUrls.length} more image
+                    {3 - imagePreviewUrls.length !== 1 ? "s" : ""} allowed
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files ?? []);
+                      if (!files.length) return;
+                      const remaining = 3 - imagePreviewUrls.length;
+                      const toProcess = files.slice(0, remaining);
+
+                      const results = await Promise.all(
+                        toProcess.map(async (file) => {
+                          const arrayBuffer = await file.arrayBuffer();
+                          const uint8 = new Uint8Array(arrayBuffer);
+                          const previewUrl = URL.createObjectURL(file);
+                          return { uint8, previewUrl };
+                        }),
+                      );
+
+                      setProductForm((prev) => ({
+                        ...prev,
+                        images: [
+                          ...prev.images,
+                          ...results.map((r) => r.uint8),
+                        ],
+                      }));
+                      setImagePreviewUrls((prev) => [
+                        ...prev,
+                        ...results.map((r) => r.previewUrl),
+                      ]);
+                      // Reset the input so same file can be re-selected
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
           </div>
           <DialogFooter>

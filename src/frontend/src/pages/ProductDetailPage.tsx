@@ -20,8 +20,9 @@ import {
   Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { ExternalBlob } from "../backend";
 import type { Product } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
@@ -56,7 +57,18 @@ export function ProductDetailPage() {
     backendProduct ?? STATIC_PRODUCTS.find((p) => p.id === productId) ?? null;
 
   const imageUrl = product ? getProductImage(product) : "";
-  const images = [imageUrl, imageUrl, imageUrl]; // Show same image multiple times as gallery
+  // Build image gallery: use actual uploaded images if present, else show the fallback image
+  const images = useMemo(() => {
+    if (product?.images && product.images.length > 0) {
+      const realImages = product.images
+        .filter((img) => img.length > 0)
+        .map((img) =>
+          ExternalBlob.fromBytes(img as Uint8Array<ArrayBuffer>).getDirectURL(),
+        );
+      if (realImages.length > 0) return realImages;
+    }
+    return [imageUrl];
+  }, [product, imageUrl]);
 
   const discountPct = product
     ? getDiscountPercentage(product.price, product.discountedPrice)
@@ -183,15 +195,14 @@ export function ProductDetailPage() {
               key={selectedImage}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              src={images[selectedImage]}
+              src={images[Math.min(selectedImage, images.length - 1)]}
               alt={product.name}
               className="w-full h-full object-cover"
             />
           </div>
-          <div className="flex gap-2">
-            {[...new Set(images)].map((img) => {
-              const imgIndex = images.indexOf(img);
-              return (
+          {images.length > 1 && (
+            <div className="flex gap-2 flex-wrap">
+              {images.map((img, imgIndex) => (
                 <button
                   type="button"
                   key={img}
@@ -204,13 +215,13 @@ export function ProductDetailPage() {
                 >
                   <img
                     src={img}
-                    alt=""
+                    alt={`View ${imgIndex + 1}`}
                     className="w-full h-full object-cover"
                   />
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Product info */}
