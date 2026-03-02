@@ -20,6 +20,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -42,9 +43,10 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Category, Order, Product } from "../backend.d";
-import { OrderStatus } from "../backend.d";
+import { OrderStatus, UserRole } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
+  useAssignCallerUserRole,
   useCreateCategory,
   useCreateProduct,
   useDeleteCategory,
@@ -214,10 +216,17 @@ export function AdminPage() {
   const { data: products, isLoading: productsLoading } = useGetAllProducts();
   const { data: categories, isLoading: categoriesLoading } = useGetCategories();
   const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
+  const queryClient = useQueryClient();
+  const assignRole = useAssignCallerUserRole();
 
   const [pinVerified, setPinVerified] = useState(
     () => sessionStorage.getItem(PIN_SESSION_KEY) === "true",
   );
+
+  // Claim admin PIN state
+  const [claimPin, setClaimPin] = useState("");
+  const [claimShake, setClaimShake] = useState(false);
+  const claimInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -270,16 +279,147 @@ export function AdminPage() {
   }
 
   if (!isAdmin) {
+    const handleClaimDigit = (index: number, value: string) => {
+      if (!/^\d?$/.test(value)) return;
+      const newPin = claimPin.split("");
+      newPin[index] = value;
+      const joined = newPin.join("").slice(0, 4);
+      setClaimPin(joined);
+      if (value && index < 3) {
+        claimInputRefs.current[index + 1]?.focus();
+      }
+      if (joined.length === 4) {
+        setTimeout(() => handleClaimPin(joined), 100);
+      }
+    };
+
+    const handleClaimKeyDown = (
+      index: number,
+      e: React.KeyboardEvent<HTMLInputElement>,
+    ) => {
+      if (e.key === "Backspace" && !claimPin[index] && index > 0) {
+        claimInputRefs.current[index - 1]?.focus();
+        setClaimPin((prev) => prev.slice(0, index - 1));
+      }
+    };
+
+    const handleClaimPin = async (enteredPin: string) => {
+      if (enteredPin !== ADMIN_PIN) {
+        setClaimShake(true);
+        setClaimPin("");
+        claimInputRefs.current[0]?.focus();
+        setTimeout(() => setClaimShake(false), 600);
+        toast.error("Galat PIN! Dobara try karein.");
+        return;
+      }
+      // Correct PIN — attempt to claim admin
+      try {
+        const principal = identity!.getPrincipal();
+        await assignRole.mutateAsync({ user: principal, role: UserRole.admin });
+        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+        toast.success("Admin access mil gaya! Dashboard khul raha hai...");
+      } catch {
+        setClaimPin("");
+        claimInputRefs.current[0]?.focus();
+        toast.error(
+          "Admin access nahi mila. Kisi existing admin se request karein.",
+        );
+      }
+    };
+
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <Shield className="w-16 h-16 mx-auto text-muted-foreground mb-4 opacity-50" />
-        <h2 className="font-display font-bold text-xl mb-2">Access Denied</h2>
-        <p className="text-muted-foreground mb-6">
-          You don't have admin privileges.
-        </p>
-        <Button asChild>
-          <Link to="/">Go Home</Link>
-        </Button>
+      <div className="container mx-auto px-4 py-20 flex flex-col items-center justify-center">
+        <motion.div
+          className="bg-white border border-border rounded-2xl shadow-lg p-8 w-full max-w-sm text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <div className="w-16 h-16 rounded-full bg-brand-orange/10 flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-brand-orange" />
+          </div>
+          <h2 className="font-display font-bold text-xl mb-1">Admin Setup</h2>
+          <p className="text-muted-foreground text-sm mb-8">
+            Pehli baar admin access claim karne ke liye PIN enter karein
+          </p>
+
+          <motion.div
+            className="flex justify-center gap-3 mb-6"
+            animate={claimShake ? { x: [-8, 8, -8, 8, -4, 4, 0] } : {}}
+            transition={{ duration: 0.4 }}
+          >
+            {[0, 1, 2, 3].map((i) => (
+              <input
+                key={i}
+                ref={(el) => {
+                  claimInputRefs.current[i] = el;
+                }}
+                type="password"
+                inputMode="numeric"
+                maxLength={1}
+                value={claimPin[i] || ""}
+                onChange={(e) => handleClaimDigit(i, e.target.value)}
+                onKeyDown={(e) => handleClaimKeyDown(i, e)}
+                className="w-14 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none focus:border-brand-orange transition-colors bg-muted/30"
+                disabled={assignRole.isPending}
+              />
+            ))}
+          </motion.div>
+
+          {/* Numpad */}
+          <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto mb-6">
+            {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(
+              (key) => (
+                <button
+                  type="button"
+                  key={key}
+                  disabled={assignRole.isPending}
+                  onClick={() => {
+                    if (key === "") return;
+                    if (key === "⌫") {
+                      const newPin = claimPin.slice(0, -1);
+                      setClaimPin(newPin);
+                      const focusIdx = Math.max(0, newPin.length);
+                      claimInputRefs.current[focusIdx]?.focus();
+                    } else if (claimPin.length < 4) {
+                      const newPin = claimPin + key;
+                      setClaimPin(newPin);
+                      if (newPin.length < 4) {
+                        claimInputRefs.current[newPin.length]?.focus();
+                      }
+                      if (newPin.length === 4) {
+                        setTimeout(() => void handleClaimPin(newPin), 100);
+                      }
+                    }
+                  }}
+                  className={`h-12 rounded-xl font-semibold text-lg transition-all ${
+                    key === ""
+                      ? "invisible"
+                      : key === "⌫"
+                        ? "bg-muted hover:bg-muted/80 text-muted-foreground"
+                        : "bg-muted hover:bg-brand-orange hover:text-white active:scale-95"
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {key}
+                </button>
+              ),
+            )}
+          </div>
+
+          {assignRole.isPending && (
+            <div className="flex items-center justify-center gap-2 text-brand-orange text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Admin access de raha hoon...
+            </div>
+          )}
+
+          <Button
+            asChild
+            variant="ghost"
+            className="mt-2 text-muted-foreground text-sm"
+          >
+            <Link to="/">Wapas Home</Link>
+          </Button>
+        </motion.div>
       </div>
     );
   }

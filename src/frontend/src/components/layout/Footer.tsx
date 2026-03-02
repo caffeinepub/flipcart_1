@@ -1,12 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Facebook,
-  Heart,
-  Instagram,
-  Package,
-  Twitter,
-  Youtube,
-} from "lucide-react";
+import { Heart, Package, Phone } from "lucide-react";
 import { SiFacebook, SiInstagram, SiX, SiYoutube } from "react-icons/si";
 
 export function Footer() {
@@ -127,7 +120,6 @@ export function Footer() {
                 "Return Policy",
                 "Track Order",
                 "Payment Options",
-                "Contact Us",
               ].map((item) => (
                 <li key={item}>
                   <span className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer">
@@ -135,6 +127,15 @@ export function Footer() {
                   </span>
                 </li>
               ))}
+              <li>
+                <a
+                  href="tel:9142643423"
+                  className="flex items-center gap-2 text-white/60 hover:text-brand-orange text-sm transition-colors"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>9142643423</span>
+                </a>
+              </li>
             </ul>
           </div>
         </div>
