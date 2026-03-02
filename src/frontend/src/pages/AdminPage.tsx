@@ -467,6 +467,27 @@ export function AdminPage() {
             </div>
           )}
 
+          <button
+            type="button"
+            className="text-xs text-muted-foreground hover:text-brand-orange underline underline-offset-2 transition-colors mt-2"
+            onClick={() => {
+              if (
+                confirm(
+                  "PIN reset karein? Iske baad default PIN '0078' use karna hoga.",
+                )
+              ) {
+                localStorage.removeItem(PIN_STORAGE_KEY);
+                toast.success(
+                  "PIN reset ho gaya! Ab default PIN '0078' use karein.",
+                );
+                setClaimPin("");
+                setTimeout(() => claimInputRefs.current[0]?.focus(), 100);
+              }
+            }}
+          >
+            PIN bhool gaye? Reset karein
+          </button>
+
           <Button
             asChild
             variant="ghost"
