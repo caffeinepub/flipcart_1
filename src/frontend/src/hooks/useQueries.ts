@@ -1,3 +1,4 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CartItem,
@@ -8,6 +9,7 @@ import type {
   Review,
   ShoppingItem,
   UserProfile,
+  UserRole,
 } from "../backend.d";
 import { useActor } from "./useActor";
 
@@ -152,7 +154,11 @@ export function useGetCart() {
     queryKey: ["cart"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getCart();
+      try {
+        return await actor.getCart();
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -164,7 +170,11 @@ export function useGetCartTotal() {
     queryKey: ["cartTotal"],
     queryFn: async () => {
       if (!actor) return 0n;
-      return actor.getCartTotal();
+      try {
+        return await actor.getCartTotal();
+      } catch {
+        return 0n;
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -262,9 +272,29 @@ export function useGetAllOrders() {
     queryKey: ["allOrders"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllOrders();
+      try {
+        return await actor.getAllOrders();
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !isFetching,
+  });
+}
+
+export function useGetOrdersForUser(userId: Principal | null) {
+  const { actor, isFetching } = useActor();
+  return useQuery<Order[]>({
+    queryKey: ["ordersForUser", userId?.toString()],
+    queryFn: async () => {
+      if (!actor || !userId) return [];
+      try {
+        return await actor.getOrdersForUser(userId);
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!actor && !isFetching && !!userId,
   });
 }
 
@@ -296,7 +326,11 @@ export function useGetCallerUserProfile() {
     queryKey: ["userProfile"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserProfile();
+      try {
+        return await actor.getCallerUserProfile();
+      } catch {
+        return null;
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -322,7 +356,11 @@ export function useIsCallerAdmin() {
     queryKey: ["isAdmin"],
     queryFn: async () => {
       if (!actor) return false;
-      return actor.isCallerAdmin();
+      try {
+        return await actor.isCallerAdmin();
+      } catch {
+        return false;
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -337,6 +375,21 @@ export function useGetCallerUserRole() {
       return actor.getCallerUserRole();
     },
     enabled: !!actor && !isFetching,
+  });
+}
+
+export function useAssignCallerUserRole() {
+  const { actor } = useActor();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ user, role }: { user: Principal; role: UserRole }) => {
+      if (!actor) throw new Error("Not connected");
+      await actor.assignCallerUserRole(user, role);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+      queryClient.invalidateQueries({ queryKey: ["userRole"] });
+    },
   });
 }
 

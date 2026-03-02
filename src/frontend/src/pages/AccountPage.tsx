@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@tanstack/react-router";
 import {
   Edit3,
+  Info,
   Loader2,
   LogOut,
   Mail,
@@ -20,11 +21,10 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { OrderStatus } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
-  useGetAllOrders,
   useGetCallerUserProfile,
+  useGetOrdersForUser,
   useIsCallerAdmin,
   useSaveCallerUserProfile,
 } from "../hooks/useQueries";
@@ -34,7 +34,9 @@ export function AccountPage() {
   const { identity, login, clear } = useInternetIdentity();
   const { data: profile, isLoading: profileLoading } =
     useGetCallerUserProfile();
-  const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
+  const principal = identity?.getPrincipal() ?? null;
+  const { data: orders, isLoading: ordersLoading } =
+    useGetOrdersForUser(principal);
   const { data: isAdmin } = useIsCallerAdmin();
   const saveProfile = useSaveCallerUserProfile();
 
@@ -88,14 +90,11 @@ export function AccountPage() {
   };
 
   const principalId = identity.getPrincipal().toString();
-  const userOrders =
-    orders?.filter((o) => o.userId.toString() === principalId) ?? orders ?? [];
-
-  const recentOrders = userOrders.slice(0, 3);
+  const recentOrders = (orders ?? []).slice(0, 3);
 
   return (
     <main className="container mx-auto px-4 py-6 max-w-4xl">
-      <h1 className="font-display font-bold text-2xl mb-6 flex items-center gap-2">
+      <h1 className="font-display font-bold text-2xl mb-4 flex items-center gap-2">
         <User className="w-6 h-6 text-brand-orange" />
         My Account
         {isAdmin && (
@@ -104,6 +103,21 @@ export function AccountPage() {
           </Badge>
         )}
       </h1>
+
+      {/* Admin info note — shown only to non-admins */}
+      {!isAdmin && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-5 flex items-start gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3"
+        >
+          <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-blue-800">
+            <span className="font-semibold">Admin access chahiye?</span> App
+            owner se contact karein — woh aapko admin privileges de sakte hain.
+          </p>
+        </motion.div>
+      )}
 
       <div className="grid md:grid-cols-3 gap-6">
         {/* Profile sidebar */}
@@ -118,38 +132,46 @@ export function AccountPage() {
             <p className="text-muted-foreground text-xs mt-1 font-mono">
               {principalId.slice(0, 20)}...
             </p>
-            {isAdmin && (
+            {isAdmin ? (
               <Badge className="mt-2 bg-brand-orange text-white border-0 text-xs">
                 <Shield className="w-3 h-3 mr-1" /> Admin
               </Badge>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">Regular User</p>
             )}
           </div>
 
           {/* Quick links */}
           <div className="bg-white rounded-2xl border border-border overflow-hidden">
             <nav>
-              {[
-                { label: "My Orders", to: "/orders", icon: Package },
-                {
-                  label: "Admin Dashboard",
-                  to: "/admin",
-                  icon: Shield,
-                  adminOnly: true,
-                },
-              ]
-                .filter((item) => !item.adminOnly || isAdmin)
-                .map((item, i, arr) => (
-                  <div key={item.label}>
-                    <Link
-                      to={item.to}
-                      className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors"
-                    >
-                      <item.icon className="w-4 h-4 text-brand-orange" />
-                      {item.label}
-                    </Link>
-                    {i < arr.length - 1 && <Separator />}
-                  </div>
-                ))}
+              <Link
+                to="/orders"
+                className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors"
+              >
+                <Package className="w-4 h-4 text-brand-orange" />
+                My Orders
+              </Link>
+              <Separator />
+              {isAdmin ? (
+                <Link
+                  to="/admin"
+                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors"
+                >
+                  <Shield className="w-4 h-4 text-brand-orange" />
+                  Admin Dashboard
+                </Link>
+              ) : (
+                <div
+                  className="flex items-center gap-3 px-4 py-3 text-sm opacity-40 cursor-not-allowed select-none"
+                  title="Pehle admin ban jao"
+                >
+                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <span>Admin Dashboard</span>
+                  <span className="ml-auto text-[10px] bg-muted text-muted-foreground rounded px-1.5 py-0.5">
+                    Admin only
+                  </span>
+                </div>
+              )}
             </nav>
           </div>
 

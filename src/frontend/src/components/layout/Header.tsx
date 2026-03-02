@@ -13,6 +13,7 @@ import {
   Bell,
   ChevronDown,
   Heart,
+  LayoutDashboard,
   LogOut,
   Menu,
   Package,
@@ -162,6 +163,19 @@ export function Header() {
                 </Button>
               )}
 
+              {/* Admin Dashboard button */}
+              {isLoggedIn && isAdmin && (
+                <Button
+                  className="bg-brand-orange hover:bg-orange-600 text-white gap-1.5 h-10 px-3 font-semibold shadow-sm"
+                  asChild
+                >
+                  <Link to="/admin">
+                    <LayoutDashboard className="w-4 h-4" />
+                    <span className="hidden md:inline text-sm">Admin</span>
+                  </Link>
+                </Button>
+              )}
+
               {/* Cart */}
               <Button
                 variant="ghost"
@@ -278,6 +292,19 @@ export function Header() {
                   {item.label}
                 </Link>
               ))}
+              {isLoggedIn && isAdmin && (
+                <>
+                  <div className="border-t my-1" />
+                  <Link
+                    to="/admin"
+                    className="py-2 px-3 text-sm font-semibold text-brand-orange hover:bg-orange-50 rounded-md flex items-center gap-2"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Admin Dashboard
+                  </Link>
+                </>
+              )}
             </nav>
           </motion.div>
         )}

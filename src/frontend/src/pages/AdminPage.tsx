@@ -23,8 +23,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
+  Delete,
   Edit3,
   Loader2,
+  Lock,
   Package,
   Plus,
   Save,
@@ -37,7 +39,7 @@ import {
   X,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Category, Order, Product } from "../backend.d";
 import { OrderStatus } from "../backend.d";
@@ -76,12 +78,146 @@ const EMPTY_CATEGORY: Category = {
   description: "",
 };
 
+// Hardcoded 4-digit admin PIN
+const ADMIN_PIN = "1234";
+const PIN_SESSION_KEY = "admin_pin_verified";
+
+function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
+  const [pin, setPin] = useState("");
+  const [shake, setShake] = useState(false);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleDigit = (index: number, value: string) => {
+    if (!/^\d?$/.test(value)) return;
+    const newPin = pin.split("");
+    newPin[index] = value;
+    const joined = newPin.join("").slice(0, 4);
+    setPin(joined);
+    if (value && index < 3) {
+      inputRefs.current[index + 1]?.focus();
+    }
+    if (joined.length === 4) {
+      setTimeout(() => checkPin(joined), 100);
+    }
+  };
+
+  const handleKeyDown = (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key === "Backspace" && !pin[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+      setPin((prev) => prev.slice(0, index - 1));
+    }
+  };
+
+  const checkPin = (enteredPin: string) => {
+    if (enteredPin === ADMIN_PIN) {
+      sessionStorage.setItem(PIN_SESSION_KEY, "true");
+      onUnlock();
+    } else {
+      setShake(true);
+      setPin("");
+      inputRefs.current[0]?.focus();
+      setTimeout(() => setShake(false), 600);
+      toast.error("Galat PIN! Dobara try karein.");
+    }
+  };
+
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
+
+  return (
+    <div className="container mx-auto px-4 py-20 flex flex-col items-center justify-center">
+      <motion.div
+        className="bg-white border border-border rounded-2xl shadow-lg p-8 w-full max-w-sm text-center"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="w-16 h-16 rounded-full bg-brand-orange/10 flex items-center justify-center mx-auto mb-4">
+          <Lock className="w-8 h-8 text-brand-orange" />
+        </div>
+        <h2 className="font-display font-bold text-xl mb-1">Admin PIN</h2>
+        <p className="text-muted-foreground text-sm mb-8">
+          4-digit PIN enter karein Admin Dashboard kholne ke liye
+        </p>
+
+        <motion.div
+          className="flex justify-center gap-3 mb-6"
+          animate={shake ? { x: [-8, 8, -8, 8, -4, 4, 0] } : {}}
+          transition={{ duration: 0.4 }}
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <input
+              key={i}
+              ref={(el) => {
+                inputRefs.current[i] = el;
+              }}
+              type="password"
+              inputMode="numeric"
+              maxLength={1}
+              value={pin[i] || ""}
+              onChange={(e) => handleDigit(i, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(i, e)}
+              className="w-14 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none focus:border-brand-orange transition-colors bg-muted/30"
+            />
+          ))}
+        </motion.div>
+
+        {/* Numpad */}
+        <div className="grid grid-cols-3 gap-2 max-w-[220px] mx-auto">
+          {["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"].map(
+            (key) => (
+              <button
+                type="button"
+                key={key}
+                onClick={() => {
+                  if (key === "") return;
+                  if (key === "⌫") {
+                    const newPin = pin.slice(0, -1);
+                    setPin(newPin);
+                    const focusIdx = Math.max(0, newPin.length);
+                    inputRefs.current[focusIdx]?.focus();
+                  } else if (pin.length < 4) {
+                    const newPin = pin + key;
+                    setPin(newPin);
+                    if (newPin.length < 4) {
+                      inputRefs.current[newPin.length]?.focus();
+                    }
+                    if (newPin.length === 4) {
+                      setTimeout(() => checkPin(newPin), 100);
+                    }
+                  }
+                }}
+                className={`h-12 rounded-xl font-semibold text-lg transition-all ${
+                  key === ""
+                    ? "invisible"
+                    : key === "⌫"
+                      ? "bg-muted hover:bg-muted/80 text-muted-foreground"
+                      : "bg-muted hover:bg-brand-orange hover:text-white active:scale-95"
+                }`}
+              >
+                {key}
+              </button>
+            ),
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 export function AdminPage() {
   const { identity, login } = useInternetIdentity();
   const { data: isAdmin, isLoading: adminLoading } = useIsCallerAdmin();
   const { data: products, isLoading: productsLoading } = useGetAllProducts();
   const { data: categories, isLoading: categoriesLoading } = useGetCategories();
   const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
+
+  const [pinVerified, setPinVerified] = useState(
+    () => sessionStorage.getItem(PIN_SESSION_KEY) === "true",
+  );
 
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -146,6 +282,11 @@ export function AdminPage() {
         </Button>
       </div>
     );
+  }
+
+  // PIN verification
+  if (!pinVerified) {
+    return <AdminPinLock onUnlock={() => setPinVerified(true)} />;
   }
 
   // Stats

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ChevronRight,
   Clock,
+  LayoutDashboard,
   RotateCcw,
   Shield,
   Star,
@@ -15,7 +16,7 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { ProductCard } from "../components/product/ProductCard";
-import { useGetAllProducts } from "../hooks/useQueries";
+import { useGetAllProducts, useIsCallerAdmin } from "../hooks/useQueries";
 import {
   CATEGORY_ICONS,
   STATIC_CATEGORIES,
@@ -55,6 +56,7 @@ const HERO_SLIDES = [
 export function HomePage() {
   const navigate = useNavigate();
   const { data: backendProducts } = useGetAllProducts();
+  const { data: isAdmin } = useIsCallerAdmin();
   const [heroIndex, setHeroIndex] = useState(0);
 
   // Use backend products if available, fall back to static
@@ -145,6 +147,30 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Admin Quick Access Banner — sirf admin users ko dikhega */}
+      {isAdmin && (
+        <section className="bg-gradient-to-r from-brand-navy to-blue-900 border-b border-blue-800">
+          <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-white/80 text-sm">
+              <LayoutDashboard className="w-4 h-4 text-brand-orange flex-shrink-0" />
+              <span>
+                Admin hain? Products, orders aur categories manage karein
+              </span>
+            </div>
+            <Button
+              asChild
+              size="sm"
+              className="bg-brand-orange hover:bg-orange-500 text-white font-semibold gap-2 flex-shrink-0"
+            >
+              <Link to="/admin">
+                <LayoutDashboard className="w-4 h-4" />
+                Admin Dashboard
+              </Link>
+            </Button>
+          </div>
+        </section>
+      )}
 
       {/* Trust Signals */}
       <section className="bg-white border-b">
