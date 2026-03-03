@@ -31,6 +31,7 @@ import {
   useGetProduct,
   useGetReviewsForProduct,
 } from "../hooks/useQueries";
+import { useWishlist } from "../hooks/useWishlist";
 import {
   STATIC_PRODUCTS,
   formatPrice,
@@ -47,6 +48,8 @@ export function ProductDetailPage() {
   const addToCart = useAddToCart();
   const addReview = useAddReview();
 
+  const { isWishlisted, toggleWishlist } = useWishlist();
+
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
   const [reviewRating, setReviewRating] = useState(5);
@@ -55,6 +58,8 @@ export function ProductDetailPage() {
   // Find product: first try backend, then static data
   const product: Product | null =
     backendProduct ?? STATIC_PRODUCTS.find((p) => p.id === productId) ?? null;
+
+  const wishlisted = product ? isWishlisted(product.id) : false;
 
   const imageUrl = product ? getProductImage(product) : "";
   // Build image gallery: use actual uploaded images if present, else show the fallback image
@@ -346,8 +351,23 @@ export function ProductDetailPage() {
 
           {/* Share / Wishlist */}
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
-              <Heart className="w-4 h-4" /> Wishlist
+            <Button
+              variant="outline"
+              size="sm"
+              className={`gap-2 ${wishlisted ? "text-red-500 border-red-300 hover:bg-red-50" : ""}`}
+              onClick={() => {
+                if (!product) return;
+                toggleWishlist(product.id);
+                toast.success(
+                  wishlisted ? "Removed from wishlist" : "Added to wishlist!",
+                );
+              }}
+              data-ocid="product.wishlist.toggle"
+            >
+              <Heart
+                className={`w-4 h-4 ${wishlisted ? "fill-red-500 text-red-500" : ""}`}
+              />{" "}
+              {wishlisted ? "Wishlisted" : "Wishlist"}
             </Button>
             <Button
               variant="outline"
@@ -398,38 +418,110 @@ export function ProductDetailPage() {
           </div>
         </div>
 
+        {/* Star breakdown */}
+        {reviews && reviews.length > 0 && (
+          <div className="bg-muted/40 rounded-xl p-4 mb-6 flex gap-6 items-center flex-wrap">
+            <div className="text-center">
+              <p className="font-display font-bold text-4xl text-foreground">
+                {product.rating.toFixed(1)}
+              </p>
+              <div className="flex items-center justify-center gap-0.5 my-1">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={`w-3.5 h-3.5 ${s <= Math.round(product.rating) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                  />
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {reviews.length} ratings
+              </p>
+            </div>
+            <div className="flex-1 min-w-[160px] space-y-1.5">
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = reviews.filter(
+                  (r) => Number(r.rating) === star,
+                ).length;
+                const pct =
+                  reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                return (
+                  <div key={star} className="flex items-center gap-2 text-xs">
+                    <span className="w-4 text-right text-muted-foreground">
+                      {star}
+                    </span>
+                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400 flex-shrink-0" />
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-yellow-400 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="w-6 text-muted-foreground">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Review list */}
         {reviews && reviews.length > 0 ? (
-          <div className="space-y-4 mb-8">
-            {reviews.map((review) => (
-              <div
-                key={review.userId.toString()}
-                className="border-b border-border pb-4 last:border-0"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex items-center gap-1 bg-green-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">
-                    {Number(review.rating)}{" "}
-                    <Star className="w-2.5 h-2.5 fill-white" />
+          <div className="space-y-4 mb-8" data-ocid="reviews.list">
+            {reviews.map((review, idx) => {
+              const initials = review.userId
+                .toString()
+                .slice(0, 2)
+                .toUpperCase();
+              return (
+                <div
+                  key={review.userId.toString()}
+                  className="border-b border-border pb-4 last:border-0"
+                  data-ocid={`reviews.item.${idx + 1}`}
+                >
+                  <div className="flex items-start gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-brand-navy text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                      {initials}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              className={`w-3 h-3 ${s <= Number(review.rating) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          Verified Buyer
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {review.userId.toString().slice(0, 10)}...
-                  </span>
+                  <p className="text-sm text-foreground ml-11">
+                    {review.comment}
+                  </p>
                 </div>
-                <p className="text-sm text-foreground">{review.comment}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="text-center py-8 text-muted-foreground mb-8">
+          <div
+            className="text-center py-8 text-muted-foreground mb-8"
+            data-ocid="reviews.empty_state"
+          >
             <Star className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">No reviews yet. Be the first to review!</p>
           </div>
         )}
 
         {/* Add review form */}
-        <div className="border-t border-border pt-6">
-          <h3 className="font-semibold text-base mb-4">Write a Review</h3>
-          <div className="space-y-3">
+        <div className="border-t border-border pt-6 bg-muted/30 rounded-xl p-5 -mx-1">
+          <h3 className="font-semibold text-base mb-4 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-brand-orange" />
+            Write a Review
+          </h3>
+          <div className="space-y-4">
             <div>
               <p className="text-sm font-medium mb-2">Your Rating</p>
               <div className="flex gap-1">
@@ -438,17 +530,26 @@ export function ProductDetailPage() {
                     type="button"
                     key={star}
                     onClick={() => setReviewRating(star)}
-                    className="text-2xl"
+                    className="transition-transform hover:scale-110 active:scale-95"
+                    aria-label={`Rate ${star} stars`}
+                    data-ocid={`review.star.${star}`}
                   >
                     <Star
-                      className={`w-6 h-6 transition-colors ${
+                      className={`w-7 h-7 transition-colors ${
                         star <= reviewRating
                           ? "fill-yellow-400 text-yellow-400"
-                          : "text-muted-foreground"
+                          : "text-muted-foreground hover:text-yellow-300"
                       }`}
                     />
                   </button>
                 ))}
+                <span className="ml-2 text-sm text-muted-foreground self-center">
+                  {
+                    ["", "Poor", "Fair", "Good", "Very Good", "Excellent"][
+                      reviewRating
+                    ]
+                  }
+                </span>
               </div>
             </div>
             <Textarea
@@ -457,15 +558,19 @@ export function ProductDetailPage() {
               onChange={(e) => setReviewComment(e.target.value)}
               rows={3}
               className="resize-none"
+              data-ocid="review.textarea"
             />
             <Button
               onClick={() => void handleSubmitReview()}
               disabled={!reviewComment.trim() || addReview.isPending}
-              className="bg-brand-navy hover:bg-blue-950 text-white"
+              className="bg-brand-navy hover:bg-blue-950 text-white gap-2"
+              data-ocid="review.submit_button"
             >
               {addReview.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MessageSquare className="w-4 h-4" />
+              )}
               Submit Review
             </Button>
           </div>

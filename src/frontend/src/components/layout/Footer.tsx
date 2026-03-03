@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Heart, Package, Phone } from "lucide-react";
+import { Package } from "lucide-react";
 import { SiFacebook, SiInstagram, SiX, SiYoutube } from "react-icons/si";
 
 export function Footer() {
@@ -16,7 +16,7 @@ export function Footer() {
               <div className="w-7 h-7 bg-brand-orange rounded-md flex items-center justify-center">
                 <Package className="w-4 h-4 text-white" />
               </div>
-              <span className="font-display font-bold text-lg">ShopEasy</span>
+              <span className="font-display font-bold text-lg">ShopExpo</span>
             </div>
             <p className="text-white/60 text-sm leading-relaxed">
               India's trusted e-commerce platform for electronics, fashion, home
@@ -115,26 +115,31 @@ export function Footer() {
               Customer Support
             </h3>
             <ul className="space-y-2">
-              {[
-                "Help Center",
-                "Return Policy",
-                "Track Order",
-                "Payment Options",
-              ].map((item) => (
-                <li key={item}>
-                  <span className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer">
-                    {item}
-                  </span>
-                </li>
-              ))}
               <li>
-                <a
-                  href="tel:9142643423"
-                  className="flex items-center gap-2 text-white/60 hover:text-brand-orange text-sm transition-colors"
+                <Link
+                  to="/faq"
+                  className="text-white/60 hover:text-white text-sm transition-colors"
                 >
-                  <Phone className="w-3.5 h-3.5" />
-                  <span>9142643423</span>
-                </a>
+                  FAQ / Help Center
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/orders"
+                  className="text-white/60 hover:text-white text-sm transition-colors"
+                >
+                  Track Order
+                </Link>
+              </li>
+              <li>
+                <span className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer">
+                  Return Policy
+                </span>
+              </li>
+              <li>
+                <span className="text-white/60 hover:text-white text-sm transition-colors cursor-pointer">
+                  Payment Options
+                </span>
               </li>
             </ul>
           </div>
@@ -145,22 +150,18 @@ export function Footer() {
       <div className="border-t border-white/10">
         <div className="container mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-white/50 text-sm">
-            © {currentYear}. Built with{" "}
-            <Heart className="inline w-3 h-3 text-brand-orange fill-brand-orange" />{" "}
-            using{" "}
-            <a
-              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-brand-orange hover:underline"
-            >
-              caffeine.ai
-            </a>
+            © {currentYear} ShopExpo. All rights reserved.
           </p>
           <div className="flex gap-4 text-white/50 text-xs">
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-            <span>Sitemap</span>
+            <Link to="/privacy" className="hover:text-white transition-colors">
+              Privacy Policy
+            </Link>
+            <Link to="/terms" className="hover:text-white transition-colors">
+              Terms of Service
+            </Link>
+            <Link to="/faq" className="hover:text-white transition-colors">
+              FAQ
+            </Link>
           </div>
         </div>
       </div>

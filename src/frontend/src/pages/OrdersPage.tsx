@@ -1,5 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@tanstack/react-router";
 import {
@@ -7,10 +14,13 @@ import {
   ChevronRight,
   Clock,
   Package,
+  RotateCcw,
   Truck,
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { OrderStatus } from "../backend.d";
 import type { Order } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -51,6 +61,29 @@ function getStatusIcon(status: OrderStatus) {
 export function OrdersPage() {
   const { identity, login } = useInternetIdentity();
   const { data: orders, isLoading } = useGetAllOrders();
+
+  // Local override statuses for cancel/return requests
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>(
+    {},
+  );
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    orderId: string;
+    action: "cancel" | "return";
+  }>({ open: false, orderId: "", action: "cancel" });
+
+  const handleConfirmAction = () => {
+    const { orderId, action } = confirmDialog;
+    const label =
+      action === "cancel" ? "Cancellation Requested" : "Return Requested";
+    setLocalStatuses((prev) => ({ ...prev, [orderId]: label }));
+    toast.success(
+      action === "cancel"
+        ? "Cancel request submitted successfully"
+        : "Return request submitted successfully",
+    );
+    setConfirmDialog({ open: false, orderId: "", action: "cancel" });
+  };
 
   if (!identity) {
     return (
@@ -122,65 +155,168 @@ export function OrdersPage() {
         My Orders
       </h1>
 
-      <div className="space-y-4">
-        {userOrders.map((order: Order, i: number) => (
-          <motion.div
-            key={order.id}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-          >
-            <Link to="/order/$orderId" params={{ orderId: order.id }}>
-              <div className="bg-white rounded-xl border border-border p-4 hover:border-brand-orange hover:shadow-md transition-all">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="text-xs text-muted-foreground font-mono">
-                        #{order.id.slice(0, 16)}...
-                      </span>
-                      <Badge
-                        className={`text-xs font-semibold border gap-1 ${getStatusColor(order.status)}`}
-                        variant="outline"
-                      >
-                        {getStatusIcon(order.status)}
-                        {order.status}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {order.items.length} item
-                      {order.items.length !== 1 ? "s" : ""}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Placed on{" "}
-                      {new Date(
-                        Number(order.createdAt) / 1000000,
-                      ).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <p className="font-display font-bold text-base text-foreground">
-                        {formatPrice(
-                          order.items.reduce(
-                            (sum, item) => sum + item.price * item.quantity,
-                            0n,
-                          ),
-                        )}
+      <div className="space-y-4" data-ocid="orders.list">
+        {userOrders.map((order: Order, i: number) => {
+          const localStatus = localStatuses[order.id];
+          const effectiveStatus = localStatus ?? order.status;
+          const isCancellable =
+            !localStatus &&
+            (order.status === OrderStatus.Pending ||
+              order.status === OrderStatus.Processing);
+          const isReturnable =
+            !localStatus && order.status === OrderStatus.Delivered;
+
+          return (
+            <motion.div
+              key={order.id}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              data-ocid={`orders.item.${i + 1}`}
+            >
+              <div className="bg-white rounded-xl border border-border p-4 hover:shadow-sm transition-all">
+                <Link to="/order/$orderId" params={{ orderId: order.id }}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="text-xs text-muted-foreground font-mono">
+                          #{order.id.slice(0, 16)}...
+                        </span>
+                        <Badge
+                          className={`text-xs font-semibold border gap-1 ${
+                            localStatus
+                              ? "bg-orange-100 text-orange-700 border-orange-200"
+                              : getStatusColor(order.status)
+                          }`}
+                          variant="outline"
+                        >
+                          {!localStatus && getStatusIcon(order.status)}
+                          {effectiveStatus}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {order.items.length} item
+                        {order.items.length !== 1 ? "s" : ""}
                       </p>
-                      <p className="text-xs text-muted-foreground">Total</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Placed on{" "}
+                        {new Date(
+                          Number(order.createdAt) / 1000000,
+                        ).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="font-display font-bold text-base text-foreground">
+                          {formatPrice(
+                            order.items.reduce(
+                              (sum, item) => sum + item.price * item.quantity,
+                              0n,
+                            ),
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Total</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
                   </div>
-                </div>
+                </Link>
+
+                {/* Action buttons */}
+                {(isCancellable || isReturnable) && (
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                    {isCancellable && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs text-destructive border-destructive/30 hover:bg-destructive/5 gap-1.5"
+                        onClick={() =>
+                          setConfirmDialog({
+                            open: true,
+                            orderId: order.id,
+                            action: "cancel",
+                          })
+                        }
+                        data-ocid={`orders.cancel.button.${i + 1}`}
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Cancel Order
+                      </Button>
+                    )}
+                    {isReturnable && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs text-blue-600 border-blue-300 hover:bg-blue-50 gap-1.5"
+                        onClick={() =>
+                          setConfirmDialog({
+                            open: true,
+                            orderId: order.id,
+                            action: "return",
+                          })
+                        }
+                        data-ocid={`orders.return.button.${i + 1}`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Return / Refund
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
-            </Link>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </div>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent className="max-w-sm" data-ocid="orders.confirm.dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold">
+              {confirmDialog.action === "cancel"
+                ? "Cancel Order?"
+                : "Request Return?"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground text-sm">
+            {confirmDialog.action === "cancel"
+              ? "Are you sure you want to cancel this order? This action cannot be undone."
+              : "Are you sure you want to return this order? Our team will contact you for pickup."}
+          </p>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() =>
+                setConfirmDialog((prev) => ({ ...prev, open: false }))
+              }
+              data-ocid="orders.confirm.cancel_button"
+            >
+              No, Keep Order
+            </Button>
+            <Button
+              className={
+                confirmDialog.action === "cancel"
+                  ? "bg-destructive hover:bg-destructive/90 text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }
+              onClick={handleConfirmAction}
+              data-ocid="orders.confirm.confirm_button"
+            >
+              {confirmDialog.action === "cancel"
+                ? "Yes, Cancel"
+                : "Yes, Return"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

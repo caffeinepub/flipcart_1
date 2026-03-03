@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
+  Camera,
   ChevronDown,
   Heart,
   LayoutDashboard,
@@ -28,6 +29,8 @@ import { useState } from "react";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import { useGetCart } from "../../hooks/useQueries";
 import { useIsCallerAdmin } from "../../hooks/useQueries";
+import { useWishlist } from "../../hooks/useWishlist";
+import { PhotoSearchModal } from "../PhotoSearchModal";
 
 export function Header() {
   const navigate = useNavigate();
@@ -37,8 +40,11 @@ export function Header() {
   const { data: isAdmin } = useIsCallerAdmin();
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [photoSearchOpen, setPhotoSearchOpen] = useState(false);
 
   const cartCount = cart?.length ?? 0;
+  const { wishlistIds } = useWishlist();
+  const wishlistCount = wishlistIds.length;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +71,7 @@ export function Header() {
                   <Package className="w-5 h-5 text-white" />
                 </div>
                 <span className="font-display font-bold text-xl text-white tracking-tight">
-                  ShopEasy
+                  ShopExpo
                 </span>
               </div>
             </Link>
@@ -83,6 +89,14 @@ export function Header() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+                <Button
+                  type="button"
+                  className="border-0 bg-white border-l border-gray-200 h-10 px-3 text-muted-foreground hover:text-brand-orange rounded-none shadow-none"
+                  onClick={() => setPhotoSearchOpen(true)}
+                  title="Search with photo"
+                >
+                  <Camera className="w-4 h-4" />
+                </Button>
                 <Button
                   type="submit"
                   className="rounded-l-none bg-brand-orange hover:bg-orange-600 h-10 px-4 border-0"
@@ -176,6 +190,25 @@ export function Header() {
                 </Button>
               )}
 
+              {/* Wishlist */}
+              <Button
+                variant="ghost"
+                className="text-white hover:bg-white/10 gap-1.5 h-10 px-2.5 relative"
+                asChild
+                data-ocid="header.wishlist.link"
+              >
+                <Link to="/wishlist">
+                  <div className="relative">
+                    <Heart className="w-5 h-5" />
+                    {wishlistCount > 0 && (
+                      <Badge className="absolute -top-2 -right-2 h-4 w-4 p-0 flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full border-0">
+                        {wishlistCount > 9 ? "9+" : wishlistCount}
+                      </Badge>
+                    )}
+                  </div>
+                </Link>
+              </Button>
+
               {/* Cart */}
               <Button
                 variant="ghost"
@@ -222,6 +255,14 @@ export function Header() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              <Button
+                type="button"
+                className="border-0 bg-white border-l border-gray-200 h-9 px-3 text-muted-foreground hover:text-brand-orange rounded-none shadow-none"
+                onClick={() => setPhotoSearchOpen(true)}
+                title="Search with photo"
+              >
+                <Camera className="w-4 h-4" />
+              </Button>
               <Button
                 type="submit"
                 className="rounded-l-none bg-brand-orange hover:bg-orange-600 h-9 px-3 border-0"
@@ -309,6 +350,11 @@ export function Header() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PhotoSearchModal
+        open={photoSearchOpen}
+        onOpenChange={setPhotoSearchOpen}
+      />
     </header>
   );
 }

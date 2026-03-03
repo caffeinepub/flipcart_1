@@ -1,5 +1,12 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link, useParams } from "@tanstack/react-router";
@@ -10,10 +17,13 @@ import {
   Clock,
   MapPin,
   Package,
+  RotateCcw,
   Truck,
   XCircle,
 } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { OrderStatus } from "../backend.d";
 import type { StatusHistory } from "../backend.d";
 import { useGetAllProducts, useGetOrder } from "../hooks/useQueries";
@@ -46,6 +56,12 @@ export function OrderDetailPage() {
   const { data: order, isLoading } = useGetOrder(orderId);
   const { data: backendProducts } = useGetAllProducts();
 
+  const [localStatus, setLocalStatus] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    action: "cancel" | "return";
+  }>({ open: false, action: "cancel" });
+
   const allProducts =
     backendProducts && backendProducts.length > 0
       ? backendProducts
@@ -76,6 +92,25 @@ export function OrderDetailPage() {
       </div>
     );
   }
+
+  const isCancellable =
+    !localStatus &&
+    (order.status === OrderStatus.Pending ||
+      order.status === OrderStatus.Processing);
+  const isReturnable = !localStatus && order.status === OrderStatus.Delivered;
+
+  const handleConfirmAction = () => {
+    const { action } = confirmDialog;
+    const label =
+      action === "cancel" ? "Cancellation Requested" : "Return Requested";
+    setLocalStatus(label);
+    toast.success(
+      action === "cancel"
+        ? "Cancel request submitted successfully"
+        : "Return request submitted successfully",
+    );
+    setConfirmDialog({ open: false, action: "cancel" });
+  };
 
   const currentStatusIndex = getStatusIndex(order.status);
   const isCancelled = order.status === OrderStatus.Cancelled;
@@ -270,10 +305,94 @@ export function OrderDetailPage() {
           </div>
           <div>
             <p className="text-muted-foreground">Status</p>
-            <p className="font-medium mt-0.5">{order.status}</p>
+            <p className="font-medium mt-0.5">{localStatus ?? order.status}</p>
           </div>
         </div>
+
+        {/* Cancel / Return buttons */}
+        {(isCancellable || isReturnable) && (
+          <div className="flex gap-3 mt-5 pt-4 border-t border-border">
+            {isCancellable && (
+              <Button
+                variant="outline"
+                className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={() =>
+                  setConfirmDialog({ open: true, action: "cancel" })
+                }
+                data-ocid="order.cancel.button"
+              >
+                <XCircle className="w-4 h-4" />
+                Cancel Order
+              </Button>
+            )}
+            {isReturnable && (
+              <Button
+                variant="outline"
+                className="gap-2 text-blue-600 border-blue-300 hover:bg-blue-50"
+                onClick={() =>
+                  setConfirmDialog({ open: true, action: "return" })
+                }
+                data-ocid="order.return.button"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Return / Refund
+              </Button>
+            )}
+          </div>
+        )}
+        {localStatus && (
+          <div className="mt-4 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+            <p className="text-sm font-medium text-orange-700">
+              ✓ {localStatus} — Our team will reach out within 24 hours.
+            </p>
+          </div>
+        )}
       </div>
+
+      {/* Confirm Dialog */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog((prev) => ({ ...prev, open }))}
+      >
+        <DialogContent className="max-w-sm" data-ocid="order.confirm.dialog">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold">
+              {confirmDialog.action === "cancel"
+                ? "Cancel Order?"
+                : "Request Return?"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-muted-foreground text-sm">
+            {confirmDialog.action === "cancel"
+              ? "Are you sure you want to cancel this order? This action cannot be undone."
+              : "Are you sure you want to return this order? Our team will contact you for pickup."}
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setConfirmDialog((prev) => ({ ...prev, open: false }))
+              }
+              data-ocid="order.confirm.cancel_button"
+            >
+              No, Keep Order
+            </Button>
+            <Button
+              className={
+                confirmDialog.action === "cancel"
+                  ? "bg-destructive hover:bg-destructive/90 text-white"
+                  : "bg-blue-600 hover:bg-blue-700 text-white"
+              }
+              onClick={handleConfirmAction}
+              data-ocid="order.confirm.confirm_button"
+            >
+              {confirmDialog.action === "cancel"
+                ? "Yes, Cancel"
+                : "Yes, Return"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

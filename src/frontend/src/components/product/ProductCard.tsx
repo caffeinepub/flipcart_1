@@ -1,12 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
-import { ShoppingCart, Star } from "lucide-react";
+import { Heart, ShoppingCart, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import type { Product } from "../../backend.d";
 import { useInternetIdentity } from "../../hooks/useInternetIdentity";
 import { useAddToCart } from "../../hooks/useQueries";
+import { useWishlist } from "../../hooks/useWishlist";
 import {
   formatPrice,
   getDiscountPercentage,
@@ -21,6 +22,8 @@ interface ProductCardProps {
 export function ProductCard({ product, compact = false }: ProductCardProps) {
   const { identity, login } = useInternetIdentity();
   const addToCart = useAddToCart();
+  const { isWishlisted, toggleWishlist } = useWishlist();
+  const wishlisted = isWishlisted(product.id);
   const discountPct = getDiscountPercentage(
     product.price,
     product.discountedPrice,
@@ -73,6 +76,29 @@ export function ProductCard({ product, compact = false }: ProductCardProps) {
               </span>
             </div>
           )}
+          {/* Wishlist heart */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleWishlist(product.id);
+              toast.success(
+                wishlisted ? "Removed from wishlist" : "Added to wishlist!",
+              );
+            }}
+            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+            aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+            data-ocid="product.wishlist.toggle"
+          >
+            <Heart
+              className={`w-3.5 h-3.5 transition-colors ${
+                wishlisted
+                  ? "fill-red-500 text-red-500"
+                  : "text-muted-foreground"
+              }`}
+            />
+          </button>
         </div>
 
         {/* Content */}

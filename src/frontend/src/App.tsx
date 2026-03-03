@@ -13,40 +13,15 @@ import { AccountPage } from "./pages/AccountPage";
 import { AdminPage } from "./pages/AdminPage";
 import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
+import { FAQPage } from "./pages/FAQPage";
 import { HomePage } from "./pages/HomePage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
-
-// Floating call button
-function FloatingCallButton() {
-  return (
-    <a
-      href="tel:9142643423"
-      aria-label="Call us"
-      className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-green-500 hover:bg-green-600 text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        className="w-6 h-6"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-        role="img"
-        aria-label="Call us"
-      >
-        <title>Call us</title>
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-        />
-      </svg>
-    </a>
-  );
-}
+import { TermsPage } from "./pages/TermsPage";
+import { WishlistPage } from "./pages/WishlistPage";
 
 // Root layout
 const rootRoute = createRootRoute({
@@ -57,7 +32,6 @@ const rootRoute = createRootRoute({
         <Outlet />
       </div>
       <Footer />
-      <FloatingCallButton />
       <Toaster richColors position="top-right" />
     </div>
   ),
@@ -139,19 +113,25 @@ const adminRoute = createRoute({
 const wishlistRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/wishlist",
-  component: () => {
-    return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <div className="text-5xl mb-4">❤️</div>
-        <h2 className="font-display font-bold text-xl mb-2">
-          Wishlist Coming Soon
-        </h2>
-        <p className="text-muted-foreground">
-          Save your favorite products here
-        </p>
-      </div>
-    );
-  },
+  component: WishlistPage,
+});
+
+const faqRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/faq",
+  component: FAQPage,
+});
+
+const termsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/terms",
+  component: TermsPage,
+});
+
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: PrivacyPage,
 });
 
 // Create router
@@ -166,6 +146,9 @@ const routeTree = rootRoute.addChildren([
   accountRoute,
   adminRoute,
   wishlistRoute,
+  faqRoute,
+  termsRoute,
+  privacyRoute,
 ]);
 
 const router = createRouter({ routeTree });

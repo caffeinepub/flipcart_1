@@ -21,7 +21,11 @@ export function useGetAllProducts() {
     queryKey: ["products"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getAllProducts();
+      try {
+        return await actor.getAllProducts();
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -100,7 +104,11 @@ export function useGetCategories() {
     queryKey: ["categories"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getCategories();
+      try {
+        return await actor.getCategories();
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -375,7 +383,11 @@ export function useGetCallerUserRole() {
     queryKey: ["userRole"],
     queryFn: async () => {
       if (!actor) return null;
-      return actor.getCallerUserRole();
+      try {
+        return await actor.getCallerUserRole();
+      } catch {
+        return null;
+      }
     },
     enabled: !!actor && !isFetching,
   });
@@ -455,7 +467,11 @@ export function useGetReviewsForProduct(productId: string) {
     queryKey: ["reviews", productId],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getReviewsForProduct(productId);
+      try {
+        return await actor.getReviewsForProduct(productId);
+      } catch {
+        return [];
+      }
     },
     enabled: !!actor && !isFetching && !!productId,
   });

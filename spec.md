@@ -1,30 +1,37 @@
-# FlipCart
+# ShopExpo
 
 ## Current State
-- Full e-commerce app with products, cart, checkout, orders, reviews
-- Authorization component is integrated (MixinAuthorization)
-- Backend has `assignCallerUserRole`, `getCallerUserRole`, `isCallerAdmin` functions
-- Admin Dashboard (AdminPage) requires admin role AND 4-digit PIN (1234)
-- No way for first user to become admin — `assignCallerUserRole` requires calling user to be admin already
-- Account page shows "Admin access chahiye? App owner se contact karein" message for non-admins
+
+ShopExpo is a full-stack e-commerce app with:
+- Internet Identity authentication
+- Product catalog with categories, search, image upload
+- Shopping cart and order management
+- Stripe + Sky Pay checkout
+- Admin dashboard with PIN lock (PIN: 0078, backend setup PIN: 1234)
+- User management, reviews, wishlists, coupons, address book, order cancel/return, sales analytics, banner management, FAQ, terms/privacy pages
+- All 18 categories pre-loaded
+
+**Known admin dashboard errors:**
+1. `getCallerUserProfile` traps for admin users who haven't registered as `#user` role — because it checks `#user` permission only, not admin
+2. `saveCallerUserProfile` similarly traps for pure admin users
+3. `getAllUsers` only returns users who have profiles — admin-only users (no profile) are missing
+4. These cause crashes when admin tries to view their profile or the users tab
 
 ## Requested Changes (Diff)
 
 ### Add
-- "Initialize Admin" flow: if no admin exists yet, the first logged-in user who visits the Admin page can claim admin privileges by entering the 4-digit PIN (1234). This acts as a bootstrap mechanism.
-- New backend query `useGetCallerUserRole` hook already exists — use it.
-- On AdminPage: before showing "Access Denied", check if caller is not admin but PIN screen not verified; if so, show "Claim Admin" option with PIN entry that calls `assignCallerUserRole` on success.
-- More specifically: add a `claimAdminIfNoneExists` path — when user is logged in but not admin, show a special "Setup Admin Access" card with PIN entry. On correct PIN, call `assignCallerUserRole` with caller's principal and `admin` role, then re-check admin status.
+- Nothing new
 
 ### Modify
-- AdminPage: Add a "Claim Admin" flow — when user is logged in but not admin, instead of just "Access Denied", show a card offering to claim admin if PIN is correct.
-- The hook `useAssignCallerUserRole` is already in useQueries.ts but needs to be wired up in AdminPage.
+- `getCallerUserProfile`: allow callers who are admin OR user (not just user)
+- `saveCallerUserProfile`: allow callers who are admin OR user (not just user)
+- `getAllUsers`: include admin-only principals who haven't saved a profile (show them with null profile, role "admin")
 
 ### Remove
-- Nothing removed.
+- Nothing
 
 ## Implementation Plan
-1. In AdminPage.tsx, modify the `!isAdmin` block to show a "Claim Admin Access" UI with PIN entry
-2. On correct PIN entry in this claim flow, call `assignCallerUserRole` with the current user's principal and `UserRole.admin`
-3. After successful role assignment, invalidate the isAdmin query so the page re-renders with admin access
-4. Show appropriate success/error toast messages
+
+1. Fix `getCallerUserProfile` — change permission check to allow both `#user` and `#admin` roles
+2. Fix `saveCallerUserProfile` — same fix
+3. Fix `getAllUsers` — after building profileUsers array, also iterate `accessControlState.userRoles` to find admins not in userProfiles, append them with `profile = null`

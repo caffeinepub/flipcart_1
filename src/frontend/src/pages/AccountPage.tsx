@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "@tanstack/react-router";
 import {
   Edit3,
+  Home,
   Info,
   Loader2,
   LogOut,
@@ -14,8 +15,10 @@ import {
   MapPin,
   Package,
   Phone,
+  Plus,
   Save,
   Shield,
+  Trash2,
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -29,6 +32,41 @@ import {
   useSaveCallerUserProfile,
 } from "../hooks/useQueries";
 import { formatPrice } from "../utils/staticData";
+
+// Address Book types and helpers
+const ADDRESS_BOOK_KEY = "shopexpo_addresses";
+
+interface SavedAddress {
+  id: string;
+  name: string;
+  phone: string;
+  street: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+function getSavedAddresses(): SavedAddress[] {
+  try {
+    const stored = localStorage.getItem(ADDRESS_BOOK_KEY);
+    return stored ? (JSON.parse(stored) as SavedAddress[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSavedAddresses(addresses: SavedAddress[]): void {
+  localStorage.setItem(ADDRESS_BOOK_KEY, JSON.stringify(addresses));
+}
+
+const EMPTY_ADDRESS: Omit<SavedAddress, "id"> = {
+  name: "",
+  phone: "",
+  street: "",
+  city: "",
+  state: "",
+  pincode: "",
+};
 
 export function AccountPage() {
   const { identity, login, clear } = useInternetIdentity();
@@ -47,6 +85,17 @@ export function AccountPage() {
     phone: "",
     address: "",
   });
+
+  // Address book state
+  const [addresses, setAddresses] = useState<SavedAddress[]>(() =>
+    getSavedAddresses(),
+  );
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<SavedAddress | null>(
+    null,
+  );
+  const [addressForm, setAddressForm] =
+    useState<Omit<SavedAddress, "id">>(EMPTY_ADDRESS);
 
   useEffect(() => {
     if (profile) {
@@ -84,9 +133,78 @@ export function AccountPage() {
       await saveProfile.mutateAsync(formData);
       toast.success("Profile updated successfully!");
       setIsEditing(false);
-    } catch {
-      toast.error("Failed to save profile");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (
+        isAdmin &&
+        (message.toLowerCase().includes("unauthorized") ||
+          message.toLowerCase().includes("not authorized") ||
+          message.toLowerCase().includes("admin") ||
+          message.toLowerCase().includes("role") ||
+          message.toLowerCase().includes("user"))
+      ) {
+        toast.error(
+          "Pehle ek regular user ke roop mein profile save karein -- admin profile saving mein error aa sakta hai.",
+        );
+      } else {
+        toast.error("Profile save nahi ho saka. Dobara try karein.");
+      }
     }
+  };
+
+  const handleSaveAddress = () => {
+    if (
+      !addressForm.name ||
+      !addressForm.phone ||
+      !addressForm.street ||
+      !addressForm.city ||
+      !addressForm.pincode
+    ) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    if (editingAddress) {
+      const updated = addresses.map((a) =>
+        a.id === editingAddress.id
+          ? { ...addressForm, id: editingAddress.id }
+          : a,
+      );
+      setAddresses(updated);
+      saveSavedAddresses(updated);
+      toast.success("Address updated!");
+    } else {
+      const newAddr: SavedAddress = {
+        ...addressForm,
+        id: crypto.randomUUID(),
+      };
+      const updated = [...addresses, newAddr];
+      setAddresses(updated);
+      saveSavedAddresses(updated);
+      toast.success("Address saved!");
+    }
+    setAddressForm(EMPTY_ADDRESS);
+    setEditingAddress(null);
+    setShowAddressForm(false);
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    const updated = addresses.filter((a) => a.id !== id);
+    setAddresses(updated);
+    saveSavedAddresses(updated);
+    toast.success("Address removed");
+  };
+
+  const handleEditAddress = (addr: SavedAddress) => {
+    setEditingAddress(addr);
+    setAddressForm({
+      name: addr.name,
+      phone: addr.phone,
+      street: addr.street,
+      city: addr.city,
+      state: addr.state,
+      pincode: addr.pincode,
+    });
+    setShowAddressForm(true);
   };
 
   const principalId = identity.getPrincipal().toString();
@@ -375,6 +493,208 @@ export function AccountPage() {
                   </Link>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Address Book */}
+          <div className="bg-white rounded-2xl border border-border p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-display font-bold text-lg flex items-center gap-2">
+                <Home className="w-5 h-5 text-brand-orange" />
+                Saved Addresses
+              </h2>
+              <Button
+                size="sm"
+                className="bg-brand-orange hover:bg-orange-600 text-white gap-1.5 h-8 text-xs"
+                onClick={() => {
+                  setEditingAddress(null);
+                  setAddressForm(EMPTY_ADDRESS);
+                  setShowAddressForm(true);
+                }}
+                data-ocid="account.address.open_modal_button"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Address
+              </Button>
+            </div>
+
+            {/* Address list */}
+            {addresses.length === 0 && !showAddressForm ? (
+              <div
+                className="text-center py-8 text-muted-foreground"
+                data-ocid="account.address.empty_state"
+              >
+                <MapPin className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No saved addresses</p>
+                <p className="text-xs mt-1">Add addresses for quick checkout</p>
+              </div>
+            ) : (
+              <div className="space-y-3 mb-4" data-ocid="account.address.list">
+                {addresses.map((addr, i) => (
+                  <div
+                    key={addr.id}
+                    className="border border-border rounded-xl p-3 flex items-start justify-between gap-3"
+                    data-ocid={`account.address.item.${i + 1}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{addr.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {addr.phone}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {addr.street}, {addr.city}
+                        {addr.state ? `, ${addr.state}` : ""} - {addr.pincode}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleEditAddress(addr)}
+                        data-ocid={`account.address.edit_button.${i + 1}`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteAddress(addr.id)}
+                        data-ocid={`account.address.delete_button.${i + 1}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add/Edit Address Form */}
+            {showAddressForm && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="border border-brand-orange/30 rounded-xl p-4 bg-orange-50/30"
+                data-ocid="account.address.modal"
+              >
+                <h3 className="font-semibold text-sm mb-3">
+                  {editingAddress ? "Edit Address" : "New Address"}
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Full Name *</Label>
+                    <Input
+                      value={addressForm.name}
+                      onChange={(e) =>
+                        setAddressForm({ ...addressForm, name: e.target.value })
+                      }
+                      placeholder="John Doe"
+                      className="h-9 text-sm"
+                      data-ocid="account.address.name.input"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Phone *</Label>
+                    <Input
+                      value={addressForm.phone}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          phone: e.target.value,
+                        })
+                      }
+                      placeholder="+91 98765 43210"
+                      className="h-9 text-sm"
+                      data-ocid="account.address.phone.input"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 space-y-1">
+                    <Label className="text-xs">Street Address *</Label>
+                    <Input
+                      value={addressForm.street}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          street: e.target.value,
+                        })
+                      }
+                      placeholder="House/Flat No, Street, Area"
+                      className="h-9 text-sm"
+                      data-ocid="account.address.street.input"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">City *</Label>
+                    <Input
+                      value={addressForm.city}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          city: e.target.value,
+                        })
+                      }
+                      placeholder="Mumbai"
+                      className="h-9 text-sm"
+                      data-ocid="account.address.city.input"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">State</Label>
+                    <Input
+                      value={addressForm.state}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          state: e.target.value,
+                        })
+                      }
+                      placeholder="Maharashtra"
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pincode *</Label>
+                    <Input
+                      value={addressForm.pincode}
+                      onChange={(e) =>
+                        setAddressForm({
+                          ...addressForm,
+                          pincode: e.target.value,
+                        })
+                      }
+                      placeholder="400001"
+                      maxLength={6}
+                      className="h-9 text-sm"
+                      data-ocid="account.address.pincode.input"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    size="sm"
+                    className="bg-brand-orange hover:bg-orange-600 text-white gap-1.5 h-8 text-xs"
+                    onClick={handleSaveAddress}
+                    data-ocid="account.address.save_button"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {editingAddress ? "Update Address" : "Save Address"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={() => {
+                      setShowAddressForm(false);
+                      setEditingAddress(null);
+                      setAddressForm(EMPTY_ADDRESS);
+                    }}
+                    data-ocid="account.address.cancel_button"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </motion.div>
             )}
           </div>
         </div>

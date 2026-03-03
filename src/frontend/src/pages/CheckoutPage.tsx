@@ -1,3 +1,4 @@
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +14,11 @@ import {
   Package,
   Shield,
   Smartphone,
+  Tag,
+  X,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { ShoppingItem } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
@@ -35,6 +38,39 @@ import {
 } from "../utils/staticData";
 
 type PaymentMethod = "skypay" | "card";
+
+// Coupon codes
+const VALID_COUPONS: Record<
+  string,
+  { type: "percent" | "flat"; value: number; label: string }
+> = {
+  SAVE10: { type: "percent", value: 10, label: "10% off" },
+  WELCOME20: { type: "percent", value: 20, label: "20% off" },
+  FLAT50: { type: "flat", value: 50, label: "₹50 flat off" },
+  SHOPEXPO15: { type: "percent", value: 15, label: "15% off" },
+};
+
+// Address book helpers
+const ADDRESS_BOOK_KEY = "shopexpo_addresses";
+
+interface SavedAddress {
+  id: string;
+  name: string;
+  phone: string;
+  street: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+function getSavedAddresses(): SavedAddress[] {
+  try {
+    const stored = localStorage.getItem(ADDRESS_BOOK_KEY);
+    return stored ? (JSON.parse(stored) as SavedAddress[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function CheckoutPage() {
   const search = useSearch({ from: "/checkout" });
@@ -56,9 +92,9 @@ export function CheckoutPage() {
       : STATIC_PRODUCTS;
 
   const [address, setAddress] = useState({
-    name: userProfile?.name ?? "",
-    phone: userProfile?.phone ?? "",
-    street: userProfile?.address ?? "",
+    name: "",
+    phone: "",
+    street: "",
     city: "",
     state: "",
     pincode: "",
@@ -68,6 +104,31 @@ export function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("skypay");
   const [upiId, setUpiId] = useState("");
   const [skyPayOrderId, setSkyPayOrderId] = useState<string | null>(null);
+
+  // Coupon state
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    type: "percent" | "flat";
+    value: number;
+    label: string;
+    saving: bigint;
+  } | null>(null);
+
+  // Address book
+  const [savedAddresses] = useState<SavedAddress[]>(() => getSavedAddresses());
+
+  // Pre-fill from userProfile when it loads
+  useEffect(() => {
+    if (userProfile) {
+      setAddress((prev) => ({
+        ...prev,
+        name: prev.name || userProfile.name || "",
+        phone: prev.phone || userProfile.phone || "",
+        street: prev.street || userProfile.address || "",
+      }));
+    }
+  }, [userProfile]);
 
   // Handle post-Stripe redirect
   if (sessionId && stripeStatus) {
@@ -218,6 +279,28 @@ export function CheckoutPage() {
   const deliveryCharge = subtotal > 499n ? 0n : 49n;
   const total = subtotal + deliveryCharge;
 
+  const handleApplyCoupon = () => {
+    const code = couponInput.trim().toUpperCase();
+    const coupon = VALID_COUPONS[code];
+    if (!coupon) {
+      toast.error(
+        "Invalid coupon code. Try SAVE10, WELCOME20, FLAT50, or SHOPEXPO15",
+      );
+      return;
+    }
+    const subtotalNum = Number(total);
+    const saving =
+      coupon.type === "percent"
+        ? BigInt(Math.floor((subtotalNum * coupon.value) / 100))
+        : BigInt(coupon.value);
+    setAppliedCoupon({ code, ...coupon, saving });
+    toast.success(`Coupon applied! You save ${formatPrice(saving)}`);
+    setCouponInput("");
+  };
+
+  const discount = appliedCoupon?.saving ?? 0n;
+  const finalTotal = total > discount ? total - discount : 0n;
+
   return (
     <main className="container mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
@@ -237,6 +320,42 @@ export function CheckoutPage() {
               <MapPin className="w-5 h-5 text-brand-orange" />
               Delivery Address
             </h2>
+
+            {/* Saved Addresses selector */}
+            {savedAddresses.length > 0 && (
+              <div className="mb-5">
+                <p className="text-sm font-medium mb-2 text-muted-foreground">
+                  Use saved address:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {savedAddresses.map((addr) => (
+                    <button
+                      type="button"
+                      key={addr.id}
+                      onClick={() =>
+                        setAddress({
+                          name: addr.name,
+                          phone: addr.phone,
+                          street: addr.street,
+                          city: addr.city,
+                          state: addr.state,
+                          pincode: addr.pincode,
+                        })
+                      }
+                      className="text-xs border border-border rounded-lg px-3 py-2 bg-muted hover:border-brand-orange hover:bg-brand-orange/5 transition-colors text-left"
+                      data-ocid="checkout.saved_address.button"
+                    >
+                      <span className="font-medium">{addr.name}</span>
+                      <br />
+                      <span className="text-muted-foreground">
+                        {addr.city}, {addr.pincode}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name">Full Name *</Label>
@@ -352,6 +471,58 @@ export function CheckoutPage() {
             <h2 className="font-display font-bold text-lg mb-4">
               Price Details
             </h2>
+
+            {/* Coupon input */}
+            {!appliedCoupon ? (
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5" /> Apply Coupon
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter code (e.g. SAVE10)"
+                    value={couponInput}
+                    onChange={(e) =>
+                      setCouponInput(e.target.value.toUpperCase())
+                    }
+                    className="text-sm h-9 uppercase"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleApplyCoupon();
+                    }}
+                    data-ocid="checkout.coupon_input"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 px-3 border-brand-orange text-brand-orange hover:bg-brand-orange hover:text-white text-xs font-bold"
+                    onClick={handleApplyCoupon}
+                    data-ocid="checkout.coupon.submit_button"
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-green-700">
+                    {appliedCoupon.code} applied!
+                  </p>
+                  <p className="text-xs text-green-600">
+                    You save {formatPrice(appliedCoupon.saving)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAppliedCoupon(null)}
+                  className="text-green-600 hover:text-green-800"
+                  data-ocid="checkout.coupon.delete_button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             <div className="space-y-3 mb-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">MRP Total</span>
@@ -363,13 +534,26 @@ export function CheckoutPage() {
                   {deliveryCharge === 0n ? "FREE" : formatPrice(deliveryCharge)}
                 </span>
               </div>
+              {appliedCoupon && (
+                <div className="flex justify-between text-sm text-green-600 font-medium">
+                  <span>Coupon ({appliedCoupon.code})</span>
+                  <span>−{formatPrice(appliedCoupon.saving)}</span>
+                </div>
+              )}
             </div>
             <Separator className="mb-4" />
             <div className="flex justify-between mb-5">
               <span className="font-bold">Total Amount</span>
-              <span className="font-display font-bold text-xl">
-                {formatPrice(total)}
-              </span>
+              <div className="text-right">
+                {appliedCoupon && (
+                  <p className="text-xs text-muted-foreground line-through">
+                    {formatPrice(total)}
+                  </p>
+                )}
+                <span className="font-display font-bold text-xl">
+                  {formatPrice(finalTotal)}
+                </span>
+              </div>
             </div>
 
             {/* Payment Method Selector */}

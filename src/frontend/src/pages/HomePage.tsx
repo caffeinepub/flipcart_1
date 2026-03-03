@@ -26,7 +26,7 @@ import {
   getProductImage,
 } from "../utils/staticData";
 
-const HERO_SLIDES = [
+const DEFAULT_HERO_SLIDES = [
   {
     title: "Massive Sale on Electronics",
     subtitle: "Up to 60% off on smartphones, laptops & more",
@@ -53,11 +53,63 @@ const HERO_SLIDES = [
   },
 ];
 
+const BANNERS_STORAGE_KEY = "shopexpo_banners";
+
+interface StoredBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonLink: string;
+  color: string;
+  imageUrl?: string;
+  active?: boolean;
+  position?: "hero" | "category" | "promo";
+}
+
+interface HeroSlide {
+  title: string;
+  subtitle: string;
+  badge: string;
+  cta: string;
+  ctaLink: string;
+  color: string;
+  imageUrl?: string;
+}
+
+function getHeroSlides(): HeroSlide[] {
+  try {
+    const stored = localStorage.getItem(BANNERS_STORAGE_KEY);
+    if (stored) {
+      const banners = JSON.parse(stored) as StoredBanner[];
+      // Only show active hero banners
+      const activeBanners = banners.filter((b) => b.active !== false);
+      if (activeBanners.length > 0) {
+        return activeBanners.map((b) => ({
+          title: b.title,
+          subtitle: b.subtitle,
+          badge: "Featured",
+          cta: b.buttonText || "Shop Now",
+          ctaLink: b.buttonLink || "/products",
+          color: b.color,
+          imageUrl: b.imageUrl || undefined,
+        }));
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return DEFAULT_HERO_SLIDES;
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const { data: backendProducts } = useGetAllProducts();
   const { data: isAdmin } = useIsCallerAdmin();
   const [heroIndex, setHeroIndex] = useState(0);
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(() =>
+    getHeroSlides(),
+  );
 
   // Use backend products if available, fall back to static
   const products =
@@ -70,28 +122,46 @@ export function HomePage() {
     .filter((p) => getDiscountPercentage(p.price, p.discountedPrice) >= 10)
     .slice(0, 6);
 
+  // React to banner changes from admin dashboard
+  useEffect(() => {
+    const handleStorage = () => {
+      setHeroSlides(getHeroSlides());
+      setHeroIndex(0);
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % HERO_SLIDES.length);
+      setHeroIndex((prev) => (prev + 1) % heroSlides.length);
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [heroSlides.length]);
 
   return (
     <main>
       {/* Hero Banner */}
       <section className="relative overflow-hidden">
         <div
-          className={`bg-gradient-to-r ${HERO_SLIDES[heroIndex].color} text-white min-h-[280px] md:min-h-[380px] flex items-center transition-all duration-700`}
+          className={`bg-gradient-to-r ${heroSlides[heroIndex].color} text-white min-h-[280px] md:min-h-[380px] flex items-center transition-all duration-700`}
         >
-          {/* Background image overlay */}
-          <div className="absolute inset-0 opacity-15">
+          {/* Background image overlay — default hero or admin-uploaded banner image */}
+          {heroSlides[heroIndex].imageUrl ? (
             <img
-              src="/assets/generated/hero-banner.dim_1200x450.jpg"
+              src={heroSlides[heroIndex].imageUrl}
               alt=""
-              className="w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover opacity-40"
             />
-          </div>
+          ) : (
+            <div className="absolute inset-0 opacity-15">
+              <img
+                src="/assets/generated/hero-banner.dim_1200x450.jpg"
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
 
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-xl">
@@ -103,13 +173,13 @@ export function HomePage() {
               >
                 <Badge className="bg-brand-orange text-white border-0 mb-4 font-semibold">
                   <Zap className="w-3 h-3 mr-1" />
-                  {HERO_SLIDES[heroIndex].badge}
+                  {heroSlides[heroIndex].badge}
                 </Badge>
                 <h1 className="font-display font-bold text-3xl md:text-5xl leading-tight mb-3">
-                  {HERO_SLIDES[heroIndex].title}
+                  {heroSlides[heroIndex].title}
                 </h1>
                 <p className="text-white/80 text-base md:text-lg mb-6">
-                  {HERO_SLIDES[heroIndex].subtitle}
+                  {heroSlides[heroIndex].subtitle}
                 </p>
                 <Button
                   className="bg-brand-orange hover:bg-orange-500 text-white font-semibold px-6 h-11 gap-2"
@@ -118,14 +188,14 @@ export function HomePage() {
                       to: "/products",
                       search: {
                         category:
-                          HERO_SLIDES[heroIndex].ctaLink
+                          heroSlides[heroIndex].ctaLink
                             .split("category=")[1]
                             ?.split("&")[0] ?? undefined,
                       },
                     })
                   }
                 >
-                  {HERO_SLIDES[heroIndex].cta}
+                  {heroSlides[heroIndex].cta}
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </motion.div>
@@ -134,7 +204,7 @@ export function HomePage() {
 
           {/* Slide indicators */}
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-            {HERO_SLIDES.map((slide, i) => (
+            {heroSlides.map((slide, i) => (
               <button
                 type="button"
                 key={slide.title}

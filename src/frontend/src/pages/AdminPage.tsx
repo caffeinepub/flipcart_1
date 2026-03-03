@@ -18,17 +18,21 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
-  Delete,
   Edit3,
+  Eye,
+  EyeOff,
+  Image,
   ImagePlus,
   Loader2,
   Lock,
+  Megaphone,
   Package,
   Plus,
   Save,
@@ -84,6 +88,67 @@ const EMPTY_CATEGORY: Category = {
   name: "",
   description: "",
 };
+
+// Banner types
+const BANNERS_STORAGE_KEY = "shopexpo_banners";
+
+interface Banner {
+  id: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonLink: string;
+  color: string;
+  imageUrl?: string;
+  active: boolean;
+  position: "hero" | "category" | "promo";
+}
+
+const BANNER_COLOR_OPTIONS = [
+  { value: "from-brand-navy via-blue-900 to-indigo-900", label: "Navy Blue" },
+  {
+    value: "from-orange-900 via-orange-800 to-amber-900",
+    label: "Deep Orange",
+  },
+  {
+    value: "from-emerald-900 via-teal-900 to-cyan-900",
+    label: "Emerald Green",
+  },
+  {
+    value: "from-purple-900 via-violet-900 to-indigo-900",
+    label: "Royal Purple",
+  },
+  { value: "from-red-900 via-rose-900 to-pink-900", label: "Crimson Red" },
+  { value: "from-gray-900 via-slate-800 to-zinc-900", label: "Charcoal" },
+];
+
+const EMPTY_BANNER: Omit<Banner, "id"> = {
+  title: "",
+  subtitle: "",
+  buttonText: "Shop Now",
+  buttonLink: "/products",
+  color: BANNER_COLOR_OPTIONS[0].value,
+  imageUrl: "",
+  active: true,
+  position: "hero",
+};
+
+function getBannersFromStorage(): Banner[] {
+  try {
+    const stored = localStorage.getItem(BANNERS_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as Banner[];
+    // Migrate old banners: set defaults for new fields
+    return parsed.map((b) => ({
+      ...b,
+      active: b.active !== undefined ? b.active : true,
+      position: b.position !== undefined ? b.position : ("hero" as const),
+      imageUrl: b.imageUrl !== undefined ? b.imageUrl : "",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 // Hardcoded 4-digit admin PIN (can be changed and stored in localStorage)
 const DEFAULT_PIN = "0078";
@@ -259,10 +324,22 @@ function AdminPinLock({ onUnlock }: { onUnlock: () => void }) {
 export function AdminPage() {
   const { identity, login } = useInternetIdentity();
   const { data: isAdmin, isLoading: adminLoading } = useIsCallerAdmin();
-  const { data: products, isLoading: productsLoading } = useGetAllProducts();
+  const {
+    data: products,
+    isLoading: productsLoading,
+    isError: productsError,
+  } = useGetAllProducts();
   const { data: categories, isLoading: categoriesLoading } = useGetCategories();
-  const { data: orders, isLoading: ordersLoading } = useGetAllOrders();
-  const { data: users, isLoading: usersLoading } = useGetAllUsers();
+  const {
+    data: orders,
+    isLoading: ordersLoading,
+    isError: ordersError,
+  } = useGetAllOrders();
+  const {
+    data: users,
+    isLoading: usersLoading,
+    isError: usersError,
+  } = useGetAllUsers();
   const queryClient = useQueryClient();
   const initializeFirstAdmin = useInitializeFirstAdmin();
   const setUserRole = useSetUserRole();
@@ -319,6 +396,17 @@ export function AdminPage() {
   const [categoryForm, setCategoryForm] = useState<Category>(EMPTY_CATEGORY);
   // Image preview URLs for newly selected files (object URLs) and existing images (ExternalBlob URLs)
   const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+
+  // Banner state
+  const [banners, setBanners] = useState<Banner[]>(() =>
+    getBannersFromStorage(),
+  );
+  const [bannerDialog, setBannerDialog] = useState<{
+    open: boolean;
+    banner: Banner | null;
+  }>({ open: false, banner: null });
+  const [bannerForm, setBannerForm] =
+    useState<Omit<Banner, "id">>(EMPTY_BANNER);
 
   if (!identity) {
     return (
@@ -381,13 +469,16 @@ export function AdminPage() {
       }
 
       try {
-        // First try to initialize as first admin
-        await initializeFirstAdmin.mutateAsync(BACKEND_SETUP_PIN);
-        // Wait a moment for canister state to propagate
-        await new Promise((resolve) => setTimeout(resolve, 800));
-        await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-        await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
-        toast.success("Admin access mil gaya! Dashboard khul raha hai...");
+        // Try to initialize as first admin (returns true if caller is/becomes admin)
+        const result =
+          await initializeFirstAdmin.mutateAsync(BACKEND_SETUP_PIN);
+        // result === true means caller is now admin
+        if (result) {
+          toast.success("Admin access mil gaya! Dashboard khul raha hai...");
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
 
@@ -396,20 +487,20 @@ export function AdminPage() {
           message.includes("initialized") ||
           message.includes("Admin already")
         ) {
-          // Admin already set — this user might already be admin, force refresh
+          // Admin already initialized — check if this user is already admin
           toast.info("Admin status check ho raha hai...");
-          await new Promise((resolve) => setTimeout(resolve, 1000));
           await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
           await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
-          // Check if the refetch returned true
+          // Wait for refetch to settle
+          await new Promise((resolve) => setTimeout(resolve, 1500));
           const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
           if (isAdminNow) {
             toast.success("Admin access confirm hua!");
           } else {
             setClaimPin("");
             claimInputRefs.current[0]?.focus();
-            toast.error(
-              "Pehla admin already set ho gaya hai. Existing admin se access request karein.",
+            toast.info(
+              "Neeche 'Pehle se admin hain?' button click karein ya existing admin se access request karein.",
             );
           }
         } else if (message.includes("anonymous")) {
@@ -418,6 +509,7 @@ export function AdminPage() {
           // Unknown error — still try refreshing admin status
           await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
           await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+          await new Promise((resolve) => setTimeout(resolve, 1500));
           const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
           if (isAdminNow) {
             toast.success("Admin access confirm hua!");
@@ -573,6 +665,7 @@ export function AdminPage() {
   // Stats
   const pendingOrders =
     orders?.filter((o) => o.status === OrderStatus.Pending).length ?? 0;
+  const activeBanners = banners.filter((b) => b.active !== false).length;
 
   const openProductDialog = (product: Product | null) => {
     const form = product ?? { ...EMPTY_PRODUCT, id: crypto.randomUUID() };
@@ -693,7 +786,7 @@ export function AdminPage() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8">
         {[
           {
             label: "Total Products",
@@ -725,6 +818,12 @@ export function AdminPage() {
             icon: Users,
             color: "text-teal-600 bg-teal-50",
           },
+          {
+            label: "Active Banners",
+            value: activeBanners,
+            icon: Megaphone,
+            color: "text-pink-600 bg-pink-50",
+          },
         ].map((stat) => (
           <motion.div
             key={stat.label}
@@ -745,7 +844,7 @@ export function AdminPage() {
 
       {/* Main tabs */}
       <Tabs defaultValue="products">
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 flex-wrap h-auto">
           <TabsTrigger value="products">
             <Package className="w-4 h-4 mr-2" /> Products
           </TabsTrigger>
@@ -757,6 +856,12 @@ export function AdminPage() {
           </TabsTrigger>
           <TabsTrigger value="users">
             <Users className="w-4 h-4 mr-2" /> Users
+          </TabsTrigger>
+          <TabsTrigger value="analytics">
+            <BarChart3 className="w-4 h-4 mr-2" /> Analytics
+          </TabsTrigger>
+          <TabsTrigger value="banners">
+            <Image className="w-4 h-4 mr-2" /> Banners
           </TabsTrigger>
         </TabsList>
 
@@ -777,6 +882,19 @@ export function AdminPage() {
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-16 rounded-xl" />
               ))}
+            </div>
+          ) : productsError ? (
+            <div
+              data-ocid="products.error_state"
+              className="text-center py-16 bg-white rounded-xl border border-red-200"
+            >
+              <Package className="w-12 h-12 mx-auto text-red-400 mb-3 opacity-50" />
+              <p className="text-red-600 text-sm font-medium mb-1">
+                Products load nahi ho sake
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Page refresh karein ya thodi der baad try karein
+              </p>
             </div>
           ) : !products || products.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-border">
@@ -814,7 +932,7 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {products.map((product) => (
+                  {(products ?? []).map((product) => (
                     <tr key={product.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3">
                         <p className="font-medium line-clamp-1">
@@ -946,6 +1064,19 @@ export function AdminPage() {
                 <Skeleton key={i} className="h-20 rounded-xl" />
               ))}
             </div>
+          ) : ordersError ? (
+            <div
+              data-ocid="orders.error_state"
+              className="text-center py-16 bg-white rounded-xl border border-red-200"
+            >
+              <ShoppingBag className="w-12 h-12 mx-auto text-red-400 mb-3 opacity-50" />
+              <p className="text-red-600 text-sm font-medium mb-1">
+                Orders load nahi ho sake
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Page refresh karein ya thodi der baad try karein
+              </p>
+            </div>
           ) : !orders || orders.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-border">
               <ShoppingBag className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-30" />
@@ -974,7 +1105,7 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {orders.map((order: Order) => (
+                  {(orders ?? []).map((order: Order) => (
                     <tr key={order.id} className="hover:bg-muted/50">
                       <td className="px-4 py-3">
                         <Link
@@ -1063,6 +1194,19 @@ export function AdminPage() {
                 <Skeleton key={i} className="h-16 rounded-xl" />
               ))}
             </div>
+          ) : usersError ? (
+            <div
+              data-ocid="users.error_state"
+              className="text-center py-16 bg-white rounded-xl border border-red-200"
+            >
+              <Users className="w-12 h-12 mx-auto text-red-400 mb-3 opacity-50" />
+              <p className="text-red-600 text-sm font-medium mb-1">
+                Users load nahi ho sake
+              </p>
+              <p className="text-muted-foreground text-xs">
+                Page refresh karein ya thodi der baad try karein
+              </p>
+            </div>
           ) : !users || users.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-border">
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-30" />
@@ -1094,7 +1238,7 @@ export function AdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {users.map((entry: UserEntry) => {
+                  {(users ?? []).map((entry: UserEntry) => {
                     const principalStr = entry.principal.toString();
                     const isSelf =
                       identity?.getPrincipal().toString() === principalStr;
@@ -1191,7 +1335,636 @@ export function AdminPage() {
             </div>
           )}
         </TabsContent>
+        {/* Analytics tab */}
+        <TabsContent value="analytics">
+          <h2 className="font-display font-semibold text-lg mb-6">
+            Sales Analytics
+          </h2>
+          {ordersLoading ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-28 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* KPI cards */}
+              {(() => {
+                const allOrders = orders ?? [];
+                const totalRevenue = allOrders.reduce(
+                  (sum, o) =>
+                    sum +
+                    o.items.reduce((s, i) => s + i.price * i.quantity, 0n),
+                  0n,
+                );
+                const avgOrderValue =
+                  allOrders.length > 0
+                    ? totalRevenue / BigInt(allOrders.length)
+                    : 0n;
+
+                const statusCounts = {
+                  Pending: 0,
+                  Processing: 0,
+                  Shipped: 0,
+                  Delivered: 0,
+                  Cancelled: 0,
+                };
+                for (const o of allOrders) {
+                  const s = o.status as string;
+                  if (s in statusCounts) {
+                    statusCounts[s as keyof typeof statusCounts]++;
+                  }
+                }
+
+                // Top 5 products by order count
+                const productCounts: Record<string, number> = {};
+                for (const o of allOrders) {
+                  for (const item of o.items) {
+                    productCounts[item.productId] =
+                      (productCounts[item.productId] ?? 0) +
+                      Number(item.quantity);
+                  }
+                }
+                const topProducts = Object.entries(productCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 5)
+                  .map(([productId, count]) => ({
+                    productId,
+                    count,
+                    name:
+                      products?.find((p) => p.id === productId)?.name ??
+                      `${productId.slice(0, 12)}...`,
+                  }));
+
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+                      {[
+                        {
+                          label: "Total Revenue",
+                          value: formatPrice(totalRevenue),
+                          icon: TrendingUp,
+                          color: "text-green-600 bg-green-50",
+                        },
+                        {
+                          label: "Total Orders",
+                          value: allOrders.length,
+                          icon: ShoppingBag,
+                          color: "text-blue-600 bg-blue-50",
+                        },
+                        {
+                          label: "Avg Order Value",
+                          value: formatPrice(avgOrderValue),
+                          icon: BarChart3,
+                          color: "text-purple-600 bg-purple-50",
+                        },
+                      ].map((stat) => (
+                        <div
+                          key={stat.label}
+                          className="bg-white rounded-xl border border-border p-5"
+                        >
+                          <div
+                            className={`w-10 h-10 rounded-lg ${stat.color} flex items-center justify-center mb-3`}
+                          >
+                            <stat.icon className="w-5 h-5" />
+                          </div>
+                          <p className="font-display font-bold text-xl">
+                            {stat.value}
+                          </p>
+                          <p className="text-muted-foreground text-xs mt-0.5">
+                            {stat.label}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* Orders by status */}
+                      <div className="bg-white rounded-xl border border-border p-5">
+                        <h3 className="font-display font-semibold text-base mb-4">
+                          Orders by Status
+                        </h3>
+                        <div className="space-y-3">
+                          {Object.entries(statusCounts).map(
+                            ([status, count]) => {
+                              const colors: Record<string, string> = {
+                                Pending: "bg-gray-100 text-gray-700",
+                                Processing: "bg-yellow-100 text-yellow-700",
+                                Shipped: "bg-blue-100 text-blue-700",
+                                Delivered: "bg-green-100 text-green-700",
+                                Cancelled: "bg-red-100 text-red-700",
+                              };
+                              return (
+                                <div
+                                  key={status}
+                                  className="flex items-center justify-between"
+                                >
+                                  <span
+                                    className={`text-xs font-semibold px-2.5 py-1 rounded-full ${colors[status] ?? "bg-muted text-muted-foreground"}`}
+                                  >
+                                    {status}
+                                  </span>
+                                  <span className="font-bold text-sm">
+                                    {count}
+                                  </span>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Top products */}
+                      <div className="bg-white rounded-xl border border-border p-5">
+                        <h3 className="font-display font-semibold text-base mb-4">
+                          Top 5 Products
+                        </h3>
+                        {topProducts.length === 0 ? (
+                          <p className="text-muted-foreground text-sm">
+                            No order data yet
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {topProducts.map((p, i) => (
+                              <div
+                                key={p.productId}
+                                className="flex items-center gap-3"
+                              >
+                                <span className="w-6 h-6 rounded-full bg-brand-orange text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                  {i + 1}
+                                </span>
+                                <span className="flex-1 text-sm line-clamp-1">
+                                  {p.name}
+                                </span>
+                                <span className="text-xs font-bold text-muted-foreground">
+                                  {p.count} sold
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </TabsContent>
+
+        {/* Banners tab */}
+        <TabsContent value="banners">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-display font-semibold text-lg">
+                Banner / Ads Management
+              </h2>
+              <p className="text-muted-foreground text-xs mt-0.5">
+                Homepage hero banners, category banners, aur promotional strips
+                manage karein
+              </p>
+            </div>
+            <Button
+              data-ocid="banners.add_button"
+              className="bg-brand-orange hover:bg-orange-600 text-white gap-2"
+              onClick={() => {
+                setBannerForm({ ...EMPTY_BANNER });
+                setBannerDialog({ open: true, banner: null });
+              }}
+            >
+              <Plus className="w-4 h-4" /> Add Banner
+            </Button>
+          </div>
+
+          {banners.length === 0 ? (
+            <div
+              data-ocid="banners.empty_state"
+              className="text-center py-16 bg-white rounded-xl border border-border"
+            >
+              <Megaphone className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-30" />
+              <p className="text-muted-foreground text-sm mb-4">
+                No banners yet. Add a banner to customize the homepage hero.
+              </p>
+              <Button
+                className="bg-brand-orange hover:bg-orange-600 text-white gap-2"
+                onClick={() => {
+                  setBannerForm({ ...EMPTY_BANNER });
+                  setBannerDialog({ open: true, banner: null });
+                }}
+              >
+                <Plus className="w-4 h-4" /> Create First Banner
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {banners.map((banner, idx) => {
+                const positionColors: Record<string, string> = {
+                  hero: "bg-blue-100 text-blue-700",
+                  category: "bg-purple-100 text-purple-700",
+                  promo: "bg-amber-100 text-amber-700",
+                };
+                const positionLabels: Record<string, string> = {
+                  hero: "Hero Carousel",
+                  category: "Category Banner",
+                  promo: "Promotional Strip",
+                };
+                return (
+                  <div
+                    key={banner.id}
+                    data-ocid={`banners.item.${idx + 1}`}
+                    className="bg-white rounded-xl border border-border overflow-hidden flex items-stretch"
+                  >
+                    {/* Left thumbnail */}
+                    <div className="w-20 md:w-28 flex-shrink-0 relative">
+                      {banner.imageUrl ? (
+                        <img
+                          src={banner.imageUrl}
+                          alt={banner.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-full h-full bg-gradient-to-br ${banner.color} min-h-[72px]`}
+                        />
+                      )}
+                    </div>
+
+                    {/* Info middle */}
+                    <div className="flex-1 min-w-0 px-4 py-3 flex flex-col justify-center gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-display font-bold text-sm line-clamp-1">
+                          {banner.title || "Untitled"}
+                        </p>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${positionColors[banner.position] ?? "bg-muted text-muted-foreground"}`}
+                        >
+                          {positionLabels[banner.position] ?? banner.position}
+                        </span>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${banner.active !== false ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}
+                        >
+                          {banner.active !== false ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-xs line-clamp-1">
+                        {banner.subtitle}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        <span className="font-medium">{banner.buttonText}</span>{" "}
+                        → {banner.buttonLink}
+                      </p>
+                    </div>
+
+                    {/* Actions right */}
+                    <div className="flex items-center gap-1 px-3 flex-shrink-0">
+                      {/* Quick toggle active */}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        data-ocid={`banners.toggle.${idx + 1}`}
+                        className={`h-8 w-8 ${banner.active !== false ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"}`}
+                        title={
+                          banner.active !== false
+                            ? "Deactivate banner"
+                            : "Activate banner"
+                        }
+                        onClick={() => {
+                          const updated = banners.map((b) =>
+                            b.id === banner.id
+                              ? {
+                                  ...b,
+                                  active: b.active === false,
+                                }
+                              : b,
+                          );
+                          setBanners(updated);
+                          localStorage.setItem(
+                            BANNERS_STORAGE_KEY,
+                            JSON.stringify(updated),
+                          );
+                          window.dispatchEvent(new Event("storage"));
+                          toast.success(
+                            banner.active !== false
+                              ? "Banner deactivated"
+                              : "Banner activated",
+                          );
+                        }}
+                      >
+                        {banner.active !== false ? (
+                          <Eye className="w-3.5 h-3.5" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        data-ocid={`banners.edit_button.${idx + 1}`}
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setBannerForm({
+                            title: banner.title,
+                            subtitle: banner.subtitle,
+                            buttonText: banner.buttonText,
+                            buttonLink: banner.buttonLink,
+                            color: banner.color,
+                            imageUrl: banner.imageUrl ?? "",
+                            active: banner.active !== false,
+                            position: banner.position ?? "hero",
+                          });
+                          setBannerDialog({ open: true, banner });
+                        }}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        data-ocid={`banners.delete_button.${idx + 1}`}
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-red-50"
+                        onClick={() => {
+                          if (!confirm("Delete this banner?")) return;
+                          const updated = banners.filter(
+                            (b) => b.id !== banner.id,
+                          );
+                          setBanners(updated);
+                          localStorage.setItem(
+                            BANNERS_STORAGE_KEY,
+                            JSON.stringify(updated),
+                          );
+                          window.dispatchEvent(new Event("storage"));
+                          toast.success("Banner deleted");
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
+
+      {/* Banner Dialog */}
+      <Dialog
+        open={bannerDialog.open}
+        onOpenChange={(open) =>
+          setBannerDialog({ open, banner: bannerDialog.banner })
+        }
+      >
+        <DialogContent
+          className="max-w-lg max-h-[90vh] overflow-y-auto"
+          data-ocid="banners.dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold">
+              {bannerDialog.banner ? "Edit Banner" : "Add New Banner"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Live Preview */}
+            <div
+              className={`bg-gradient-to-r ${bannerForm.color} rounded-xl p-4 text-white relative overflow-hidden min-h-[80px]`}
+            >
+              {bannerForm.imageUrl && (
+                <img
+                  src={bannerForm.imageUrl}
+                  alt="preview"
+                  className="absolute inset-0 w-full h-full object-cover opacity-30"
+                />
+              )}
+              <div className="relative z-10">
+                <p className="font-display font-bold text-base">
+                  {bannerForm.title || "Banner Title"}
+                </p>
+                <p className="text-white/70 text-sm">
+                  {bannerForm.subtitle || "Banner subtitle goes here"}
+                </p>
+                <span className="inline-block mt-2 bg-brand-orange text-white text-xs font-semibold px-3 py-1 rounded-full">
+                  {bannerForm.buttonText || "Shop Now"}
+                </span>
+              </div>
+            </div>
+
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <ImagePlus className="w-4 h-4 text-brand-orange" />
+                Banner Image
+                <span className="text-xs text-muted-foreground font-normal ml-1">
+                  (optional — JPG, PNG, WebP)
+                </span>
+              </Label>
+              {bannerForm.imageUrl ? (
+                <div className="relative rounded-xl overflow-hidden border-2 border-border h-28">
+                  <img
+                    src={bannerForm.imageUrl}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBannerForm({ ...bannerForm, imageUrl: "" })
+                    }
+                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label
+                  data-ocid="banners.upload_button"
+                  className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-brand-orange hover:bg-brand-orange/5 transition-all group"
+                >
+                  <Upload className="w-5 h-5 text-muted-foreground group-hover:text-brand-orange mb-1 transition-colors" />
+                  <span className="text-sm text-muted-foreground group-hover:text-brand-orange transition-colors font-medium">
+                    Click to upload image
+                  </span>
+                  <span className="text-xs text-muted-foreground mt-0.5">
+                    Used as background overlay
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const result = ev.target?.result as string;
+                        setBannerForm({ ...bannerForm, imageUrl: result });
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Title *</Label>
+              <Input
+                data-ocid="banners.input"
+                value={bannerForm.title}
+                onChange={(e) =>
+                  setBannerForm({ ...bannerForm, title: e.target.value })
+                }
+                placeholder="e.g. Massive Sale on Electronics"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subtitle</Label>
+              <Input
+                value={bannerForm.subtitle}
+                onChange={(e) =>
+                  setBannerForm({ ...bannerForm, subtitle: e.target.value })
+                }
+                placeholder="e.g. Up to 60% off on top brands"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Button Text</Label>
+                <Input
+                  value={bannerForm.buttonText}
+                  onChange={(e) =>
+                    setBannerForm({ ...bannerForm, buttonText: e.target.value })
+                  }
+                  placeholder="Shop Now"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Button Link</Label>
+                <Input
+                  value={bannerForm.buttonLink}
+                  onChange={(e) =>
+                    setBannerForm({ ...bannerForm, buttonLink: e.target.value })
+                  }
+                  placeholder="/products"
+                />
+              </div>
+            </div>
+
+            {/* Position selector */}
+            <div className="space-y-1.5">
+              <Label>Placement / Position</Label>
+              <Select
+                value={bannerForm.position}
+                onValueChange={(v) =>
+                  setBannerForm({
+                    ...bannerForm,
+                    position: v as Banner["position"],
+                  })
+                }
+              >
+                <SelectTrigger data-ocid="banners.select">
+                  <SelectValue placeholder="Select position" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hero">Hero Carousel</SelectItem>
+                  <SelectItem value="category">Category Banner</SelectItem>
+                  <SelectItem value="promo">Promotional Strip</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Active / Inactive toggle */}
+            <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3 bg-muted/30">
+              <div>
+                <p className="font-medium text-sm">Active on Homepage</p>
+                <p className="text-muted-foreground text-xs mt-0.5">
+                  Inactive banners won't show on homepage
+                </p>
+              </div>
+              <Switch
+                data-ocid="banners.switch"
+                checked={bannerForm.active !== false}
+                onCheckedChange={(checked) =>
+                  setBannerForm({ ...bannerForm, active: checked })
+                }
+              />
+            </div>
+
+            {/* Background Color Gradient */}
+            <div className="space-y-1.5">
+              <Label>Background Gradient (fallback when no image)</Label>
+              <div className="flex flex-wrap gap-2">
+                {BANNER_COLOR_OPTIONS.map((opt) => (
+                  <button
+                    type="button"
+                    key={opt.value}
+                    onClick={() =>
+                      setBannerForm({ ...bannerForm, color: opt.value })
+                    }
+                    className={`bg-gradient-to-r ${opt.value} text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${
+                      bannerForm.color === opt.value
+                        ? "ring-2 ring-brand-orange ring-offset-1"
+                        : "opacity-70 hover:opacity-100"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              data-ocid="banners.cancel_button"
+              variant="outline"
+              onClick={() => setBannerDialog({ open: false, banner: null })}
+            >
+              Cancel
+            </Button>
+            <Button
+              data-ocid="banners.save_button"
+              className="bg-brand-orange hover:bg-orange-600 text-white gap-2"
+              onClick={() => {
+                if (!bannerForm.title) {
+                  toast.error("Banner title is required");
+                  return;
+                }
+                if (bannerDialog.banner) {
+                  const updated = banners.map((b) =>
+                    b.id === bannerDialog.banner!.id
+                      ? { ...bannerForm, id: bannerDialog.banner!.id }
+                      : b,
+                  );
+                  setBanners(updated);
+                  localStorage.setItem(
+                    BANNERS_STORAGE_KEY,
+                    JSON.stringify(updated),
+                  );
+                  window.dispatchEvent(new Event("storage"));
+                  toast.success("Banner updated!");
+                } else {
+                  const newBanner: Banner = {
+                    ...bannerForm,
+                    id: crypto.randomUUID(),
+                  };
+                  const updated = [...banners, newBanner];
+                  setBanners(updated);
+                  localStorage.setItem(
+                    BANNERS_STORAGE_KEY,
+                    JSON.stringify(updated),
+                  );
+                  window.dispatchEvent(new Event("storage"));
+                  toast.success("Banner created!");
+                }
+                setBannerDialog({ open: false, banner: null });
+              }}
+            >
+              <Save className="w-4 h-4" />
+              Save Banner
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Product Dialog */}
       <Dialog
