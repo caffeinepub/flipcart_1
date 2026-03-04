@@ -155,7 +155,7 @@ const DEFAULT_PIN = "0078";
 const PIN_STORAGE_KEY = "admin_custom_pin";
 const PIN_SESSION_KEY = "admin_pin_verified";
 // Backend internal PIN — do not change without updating backend
-const BACKEND_SETUP_PIN = "1234";
+const BACKEND_SETUP_PIN = "0078";
 
 function getAdminPin(): string {
   return localStorage.getItem(PIN_STORAGE_KEY) || DEFAULT_PIN;
@@ -469,55 +469,32 @@ export function AdminPage() {
       }
 
       try {
-        // Try to initialize as first admin (returns true if caller is/becomes admin)
+        // Backend returns true if caller is/becomes admin, false if slot is taken by someone else
         const result =
           await initializeFirstAdmin.mutateAsync(BACKEND_SETUP_PIN);
-        // result === true means caller is now admin
-        if (result) {
-          toast.success("Admin access mil gaya! Dashboard khul raha hai...");
-          await new Promise((resolve) => setTimeout(resolve, 1200));
+        if (result === true) {
+          // Success — user is now admin
+          toast.success("Admin access mil gaya!");
+          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
+          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+        } else {
+          // result === false means admin slot already taken by someone else
+          toast.error(
+            "Admin pehle se set hai. Existing admin se contact karein ya 'Pehle se admin hain?' button try karein.",
+          );
+          setClaimPin("");
+          claimInputRefs.current[0]?.focus();
           await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
           await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-
-        if (
-          message.includes("already") ||
-          message.includes("initialized") ||
-          message.includes("Admin already")
-        ) {
-          // Admin already initialized — check if this user is already admin
-          toast.info("Admin status check ho raha hai...");
-          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
-          // Wait for refetch to settle
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
-          if (isAdminNow) {
-            toast.success("Admin access confirm hua!");
-          } else {
-            setClaimPin("");
-            claimInputRefs.current[0]?.focus();
-            toast.info(
-              "Neeche 'Pehle se admin hain?' button click karein ya existing admin se access request karein.",
-            );
-          }
-        } else if (message.includes("anonymous")) {
+        if (message.includes("anonymous")) {
           toast.error("Pehle login karein, phir admin access lein.");
         } else {
-          // Unknown error — still try refreshing admin status
-          await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
-          await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-          const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
-          if (isAdminNow) {
-            toast.success("Admin access confirm hua!");
-          } else {
-            setClaimPin("");
-            claimInputRefs.current[0]?.focus();
-            toast.error(`Admin access nahi mila: ${message.slice(0, 80)}`);
-          }
+          toast.error(`Admin access error: ${message.slice(0, 80)}`);
+          setClaimPin("");
+          claimInputRefs.current[0]?.focus();
         }
       }
     };
@@ -615,10 +592,20 @@ export function AdminPage() {
             type="button"
             className="text-sm text-brand-orange underline underline-offset-2 mt-3 block"
             onClick={async () => {
-              toast.info("Admin status check ho raha hai...");
-              await new Promise((resolve) => setTimeout(resolve, 800));
+              toast.info("Admin status verify ho raha hai, thodi der ruko...");
               await queryClient.invalidateQueries({ queryKey: ["isAdmin"] });
               await queryClient.refetchQueries({ queryKey: ["isAdmin"] });
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              const isAdminNow = queryClient.getQueryData<boolean>(["isAdmin"]);
+              if (isAdminNow) {
+                toast.success(
+                  "Admin access confirm hua! Dashboard khul raha hai...",
+                );
+              } else {
+                toast.error(
+                  "Aap admin nahi hain. Pehle PIN enter karein ya existing admin se request karein.",
+                );
+              }
             }}
           >
             Pehle se admin hain? Yahan click karein

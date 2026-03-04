@@ -15,9 +15,10 @@ import OutCall "http-outcalls/outcall";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import Stripe "stripe/stripe";
+import Migration "migration";
 
-
-
+// Use migration to extend admin setup logic
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
@@ -475,8 +476,8 @@ actor {
     };
   };
 
-  // 8. First Admin Setup
-  let SETUP_PIN = "1234";
+  // 8. First Admin Setup (critical fix)
+  let SETUP_PIN = "0078";
   var adminInitialized : Bool = false;
 
   public shared ({ caller }) func initializeFirstAdmin(pin : Text) : async Bool {
@@ -491,7 +492,6 @@ actor {
     };
 
     // If caller is already admin, return true
-    // We need to check this safely without trapping
     let isAlreadyAdmin = switch (accessControlState.userRoles.get(caller)) {
       case (? #admin) { true };
       case (_) { false };
@@ -501,12 +501,12 @@ actor {
       return true;
     };
 
-    // Check if admin has already been initialized
+    // If admin is already initialized, return false gracefully
     if (adminInitialized) {
-      Runtime.trap("Admin already initialized. Contact existing admin for access.");
+      return false;
     };
 
-    // Set caller as admin directly in the state and mark as initialized
+    // Set caller as admin and mark as initialized
     accessControlState.userRoles.add(caller, #admin);
     accessControlState.adminAssigned := true;
     adminInitialized := true;

@@ -1,21 +1,12 @@
 # ShopExpo
 
 ## Current State
+Full e-commerce app with products, categories, cart, orders, payments (Stripe + Sky Pay), admin dashboard with PIN lock, user management, analytics, banners, wishlist, reviews, coupons, FAQ, Terms & Privacy pages.
 
-ShopExpo is a full-stack e-commerce app with:
-- Internet Identity authentication
-- Product catalog with categories, search, image upload
-- Shopping cart and order management
-- Stripe + Sky Pay checkout
-- Admin dashboard with PIN lock (PIN: 0078, backend setup PIN: 1234)
-- User management, reviews, wishlists, coupons, address book, order cancel/return, sales analytics, banner management, FAQ, terms/privacy pages
-- All 18 categories pre-loaded
-
-**Known admin dashboard errors:**
-1. `getCallerUserProfile` traps for admin users who haven't registered as `#user` role — because it checks `#user` permission only, not admin
-2. `saveCallerUserProfile` similarly traps for pure admin users
-3. `getAllUsers` only returns users who have profiles — admin-only users (no profile) are missing
-4. These cause crashes when admin tries to view their profile or the users tab
+Admin setup uses `initializeFirstAdmin(pin)` backend function. Current issues:
+- Backend `SETUP_PIN = "1234"` hardcoded but should be `"0078"` to match frontend
+- Backend uses `Runtime.trap("Admin already initialized...")` which causes unhandled errors in frontend
+- Frontend `BACKEND_SETUP_PIN = "1234"` needs to match backend PIN
 
 ## Requested Changes (Diff)
 
@@ -23,15 +14,12 @@ ShopExpo is a full-stack e-commerce app with:
 - Nothing new
 
 ### Modify
-- `getCallerUserProfile`: allow callers who are admin OR user (not just user)
-- `saveCallerUserProfile`: allow callers who are admin OR user (not just user)
-- `getAllUsers`: include admin-only principals who haven't saved a profile (show them with null profile, role "admin")
+- Backend `initializeFirstAdmin`: Change `SETUP_PIN` from `"1234"` to `"0078"`, replace `Runtime.trap("Admin already initialized...")` with `return false` (graceful non-trap response), ensure caller-already-admin check always returns `true` without errors
+- Frontend `AdminPage.tsx`: Change `BACKEND_SETUP_PIN` from `"1234"` to `"0078"`, update error handling to handle `false` return value (admin already taken), improve error messaging so users always know what to do
 
 ### Remove
 - Nothing
 
 ## Implementation Plan
-
-1. Fix `getCallerUserProfile` — change permission check to allow both `#user` and `#admin` roles
-2. Fix `saveCallerUserProfile` — same fix
-3. Fix `getAllUsers` — after building profileUsers array, also iterate `accessControlState.userRoles` to find admins not in userProfiles, append them with `profile = null`
+1. Regenerate backend Motoko with fixed `initializeFirstAdmin` logic: PIN `"0078"`, no trap on already-initialized (return false instead), caller-already-admin returns true
+2. Update frontend AdminPage: change BACKEND_SETUP_PIN to "0078", handle false return (show "contact existing admin" message), remove dependency on error message string matching
