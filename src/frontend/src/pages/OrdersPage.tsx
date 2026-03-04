@@ -24,7 +24,7 @@ import { toast } from "sonner";
 import { OrderStatus } from "../backend.d";
 import type { Order } from "../backend.d";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { useGetAllOrders } from "../hooks/useQueries";
+import { useGetOrdersForUser } from "../hooks/useQueries";
 import { formatPrice } from "../utils/staticData";
 
 function getStatusColor(status: OrderStatus): string {
@@ -60,7 +60,8 @@ function getStatusIcon(status: OrderStatus) {
 
 export function OrdersPage() {
   const { identity, login } = useInternetIdentity();
-  const { data: orders, isLoading } = useGetAllOrders();
+  const principal = identity ? identity.getPrincipal() : null;
+  const { data: orders, isLoading } = useGetOrdersForUser(principal);
 
   // Local override statuses for cancel/return requests
   const [localStatuses, setLocalStatuses] = useState<Record<string, string>>(
@@ -118,13 +119,7 @@ export function OrdersPage() {
     );
   }
 
-  const userOrders =
-    orders?.filter(
-      (o) =>
-        identity && o.userId.toString() === identity.getPrincipal().toString(),
-    ) ??
-    orders ??
-    [];
+  const userOrders = orders ?? [];
 
   if (!userOrders || userOrders.length === 0) {
     return (

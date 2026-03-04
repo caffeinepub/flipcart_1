@@ -15,10 +15,10 @@ import OutCall "http-outcalls/outcall";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 import Stripe "stripe/stripe";
-import Migration "migration";
+
 
 // Use migration to extend admin setup logic
-(with migration = Migration.run)
+
 actor {
   include MixinStorage();
 

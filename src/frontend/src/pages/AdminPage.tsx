@@ -1195,9 +1195,17 @@ export function AdminPage() {
               </p>
             </div>
           ) : !users || users.length === 0 ? (
-            <div className="text-center py-16 bg-white rounded-xl border border-border">
+            <div
+              className="text-center py-16 bg-white rounded-xl border border-border"
+              data-ocid="users.empty_state"
+            >
               <Users className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-30" />
-              <p className="text-muted-foreground text-sm">No users found</p>
+              <p className="text-muted-foreground text-sm">
+                No registered users yet
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Users will appear here after they create a profile
+              </p>
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-border overflow-hidden">
