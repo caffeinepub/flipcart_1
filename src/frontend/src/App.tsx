@@ -5,7 +5,6 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  useNavigate,
 } from "@tanstack/react-router";
 import { Footer } from "./components/layout/Footer";
 import { Header } from "./components/layout/Header";
@@ -14,12 +13,14 @@ import { AdminPage } from "./pages/AdminPage";
 import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
 import { FAQPage } from "./pages/FAQPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { HomePage } from "./pages/HomePage";
 import { OrderDetailPage } from "./pages/OrderDetailPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
 import { ProductsPage } from "./pages/ProductsPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { TermsPage } from "./pages/TermsPage";
 import { WishlistPage } from "./pages/WishlistPage";
 
@@ -134,6 +135,18 @@ const privacyRoute = createRoute({
   component: PrivacyPage,
 });
 
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/forgot-password",
+  component: ForgotPasswordPage,
+});
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reset-password",
+  component: ResetPasswordPage,
+});
+
 // Create router
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -149,6 +162,8 @@ const routeTree = rootRoute.addChildren([
   faqRoute,
   termsRoute,
   privacyRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
 ]);
 
 const router = createRouter({ routeTree });

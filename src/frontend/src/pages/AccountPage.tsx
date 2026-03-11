@@ -121,9 +121,19 @@ export function AccountPage() {
         <Button
           className="bg-brand-orange hover:bg-orange-600 text-white"
           onClick={login}
+          data-ocid="account.login.primary_button"
         >
           Login
         </Button>
+        <div className="mt-3">
+          <Link
+            to="/forgot-password"
+            className="text-sm text-muted-foreground hover:text-brand-orange transition-colors"
+            data-ocid="account.forgot-password.link"
+          >
+            Forgot Password?
+          </Link>
+        </div>
       </div>
     );
   }
