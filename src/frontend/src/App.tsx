@@ -6,6 +6,9 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { useState } from "react";
+import { OnboardingScreen } from "./components/OnboardingScreen";
+import { BottomNav } from "./components/layout/BottomNav";
 import { Footer } from "./components/layout/Footer";
 import { Header } from "./components/layout/Header";
 import { AccountPage } from "./pages/AccountPage";
@@ -25,17 +28,29 @@ import { TermsPage } from "./pages/TermsPage";
 import { WishlistPage } from "./pages/WishlistPage";
 
 // Root layout
-const rootRoute = createRootRoute({
-  component: () => (
+function RootLayout() {
+  const [showOnboarding, setShowOnboarding] = useState(
+    () => !localStorage.getItem("shopexpo_onboarding_done"),
+  );
+
+  return (
     <div className="min-h-screen flex flex-col bg-background">
+      {showOnboarding && (
+        <OnboardingScreen onDone={() => setShowOnboarding(false)} />
+      )}
       <Header />
-      <div className="flex-1">
+      <div className="flex-1 pb-14 sm:pb-0">
         <Outlet />
       </div>
       <Footer />
+      <BottomNav />
       <Toaster richColors position="top-right" />
     </div>
-  ),
+  );
+}
+
+const rootRoute = createRootRoute({
+  component: RootLayout,
 });
 
 // Routes

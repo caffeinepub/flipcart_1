@@ -1,25 +1,24 @@
 # ShopExpo
 
 ## Current State
-Full e-commerce app with products, categories, cart, orders, payments (Stripe + Sky Pay), admin dashboard with PIN lock, user management, analytics, banners, wishlist, reviews, coupons, FAQ, Terms & Privacy pages.
-
-Admin setup uses `initializeFirstAdmin(pin)` backend function. Current issues:
-- Backend `SETUP_PIN = "1234"` hardcoded but should be `"0078"` to match frontend
-- Backend uses `Runtime.trap("Admin already initialized...")` which causes unhandled errors in frontend
-- Frontend `BACKEND_SETUP_PIN = "1234"` needs to match backend PIN
+Full-featured e-commerce app with Header, Footer, routing via TanStack Router, and pages for Home, Products, Cart, Checkout, Orders, Account, Admin, Wishlist, FAQ, Terms, Privacy, Forgot/Reset Password. No bottom navigation, no onboarding screens, no protected route middleware.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Nothing new
+- **Bottom Navigation Bar** (mobile only, `sm:hidden`): Fixed bottom bar with 5 tabs -- Home, Categories, Cart, Orders, Account. Show cart item count badge on Cart tab. Active tab highlighted. Hides on desktop.
+- **Onboarding Screen**: 3-slide welcome walkthrough shown only on first visit. Slides cover: (1) Welcome to ShopExpo, (2) Browse thousands of products, (3) Fast delivery & easy returns. Skip button and Next/Get Started button. Stored in localStorage (`shopexpo_onboarding_done`) so it shows only once.
+- **Route Middleware (Protected Routes)**: Cart, Checkout, Orders, Wishlist, Account routes redirect to `/account` (login page) if user is not authenticated. Admin route redirects non-admins to home.
 
 ### Modify
-- Backend `initializeFirstAdmin`: Change `SETUP_PIN` from `"1234"` to `"0078"`, replace `Runtime.trap("Admin already initialized...")` with `return false` (graceful non-trap response), ensure caller-already-admin check always returns `true` without errors
-- Frontend `AdminPage.tsx`: Change `BACKEND_SETUP_PIN` from `"1234"` to `"0078"`, update error handling to handle `false` return value (admin already taken), improve error messaging so users always know what to do
+- `App.tsx`: Add `beforeLoad` guards on protected routes (cart, checkout, orders, wishlist, account, admin). Wrap root layout to show onboarding overlay on first visit. Add bottom nav component.
+- `Header.tsx`: Add bottom padding on mobile to account for bottom nav bar height (pb-16 on main content area).
 
 ### Remove
-- Nothing
+- Nothing removed.
 
 ## Implementation Plan
-1. Regenerate backend Motoko with fixed `initializeFirstAdmin` logic: PIN `"0078"`, no trap on already-initialized (return false instead), caller-already-admin returns true
-2. Update frontend AdminPage: change BACKEND_SETUP_PIN to "0078", handle false return (show "contact existing admin" message), remove dependency on error message string matching
+1. Create `src/components/OnboardingScreen.tsx` -- 3-slide carousel onboarding with localStorage check.
+2. Create `src/components/layout/BottomNav.tsx` -- fixed bottom nav with Home, Categories, Cart, Orders, Account tabs and cart badge.
+3. Update `App.tsx` -- add bottom nav to root layout, add onboarding overlay, add `beforeLoad` guards for protected routes.
+4. Add `pb-16 sm:pb-0` to main content area so bottom nav doesn't overlap content on mobile.
