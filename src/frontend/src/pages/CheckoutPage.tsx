@@ -37,7 +37,7 @@ import {
   getProductImage,
 } from "../utils/staticData";
 
-type PaymentMethod = "skypay" | "card";
+type PaymentMethod = "skypay" | "googlepay" | "card";
 
 // Coupon codes
 const VALID_COUPONS: Record<
@@ -72,6 +72,43 @@ function getSavedAddresses(): SavedAddress[] {
   }
 }
 
+// Google Pay SVG Logo
+function GooglePayLogo({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size * 0.4}
+      viewBox="0 0 41 17"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      role="img"
+      aria-label="Google Pay"
+    >
+      <title>Google Pay</title>
+      <path
+        d="M19.526 2.635v4.083h2.518c.6 0 1.096-.202 1.488-.605.403-.402.605-.882.605-1.437 0-.544-.202-1.018-.605-1.422-.392-.413-.888-.619-1.488-.619h-2.518zm0 5.52v4.736h-1.504V1.198h3.99c1.013 0 1.873.337 2.582 1.012.72.675 1.08 1.497 1.08 2.466 0 .991-.36 1.819-1.08 2.482-.697.665-1.559.997-2.583.997h-2.485zM27.194 10.693c0 .392.166.718.499.979.332.26.73.391 1.19.391.643 0 1.228-.238 1.752-.713.525-.476.787-1.034.787-1.675-.496-.39-1.187-.585-2.072-.585-.645 0-1.182.156-1.614.468-.432.313-.542.714-.542 1.135zm1.812-5.533c1.126 0 2.015.302 2.666.904.652.604.978 1.431.978 2.482v5.013h-1.435v-1.128h-.065c-.631.928-1.472 1.392-2.521 1.392-.895 0-1.643-.265-2.245-.796-.601-.53-.902-1.193-.902-1.986 0-.838.317-1.506.952-2.002.634-.497 1.479-.745 2.535-.745.902 0 1.646.165 2.232.496v-.348c0-.531-.21-.982-.63-1.353-.42-.372-.914-.557-1.483-.557-.854 0-1.53.36-2.027 1.08l-1.321-.832c.724-1.04 1.802-1.62 3.266-1.62zM40.986 5.425l-5.02 11.553h-1.55l1.862-4.031-3.3-7.522h1.634l2.387 5.764h.032l2.322-5.764z"
+        fill="#3C4043"
+      />
+      <path
+        d="M13.448 7.134c0-.463-.04-.92-.116-1.366H6.967v2.588h3.634a3.11 3.11 0 01-1.344 2.042v1.68h2.169c1.27-1.17 2.022-2.9 2.022-4.944z"
+        fill="#4285F4"
+      />
+      <path
+        d="M6.967 13.63c1.814 0 3.34-.595 4.459-1.552l-2.169-1.681c-.603.406-1.38.647-2.29.647-1.754 0-3.244-1.184-3.776-2.773H.957v1.731a6.733 6.733 0 006.01 3.629z"
+        fill="#34A853"
+      />
+      <path
+        d="M3.191 8.27a4.03 4.03 0 010-2.57V3.97H.957A6.733 6.733 0 000 6.985c0 1.09.26 2.12.957 3.016l2.234-1.731z"
+        fill="#FBBC04"
+      />
+      <path
+        d="M6.967 2.927a3.647 3.647 0 012.575 1.007l1.918-1.918A6.465 6.465 0 006.967.24 6.733 6.733 0 00.957 3.87l2.234 1.73c.532-1.59 2.022-2.772 3.776-2.772z"
+        fill="#EA4335"
+      />
+    </svg>
+  );
+}
+
 export function CheckoutPage() {
   const search = useSearch({ from: "/checkout" });
   const sessionId = (search as { session_id?: string }).session_id;
@@ -101,9 +138,11 @@ export function CheckoutPage() {
   });
 
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("skypay");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethod>("googlepay");
   const [upiId, setUpiId] = useState("");
   const [skyPayOrderId, setSkyPayOrderId] = useState<string | null>(null);
+  const [googlePayOrderId, setGooglePayOrderId] = useState<string | null>(null);
 
   // Coupon state
   const [couponInput, setCouponInput] = useState("");
@@ -164,6 +203,11 @@ export function CheckoutPage() {
   // Sky Pay success screen
   if (skyPayOrderId) {
     return <SkyPaySuccessView orderId={skyPayOrderId} />;
+  }
+
+  // Google Pay success screen
+  if (googlePayOrderId) {
+    return <GooglePaySuccessView orderId={googlePayOrderId} />;
   }
 
   if (!identity) {
@@ -275,6 +319,22 @@ export function CheckoutPage() {
     }
   };
 
+  const handleGooglePay = async () => {
+    if (!validateAddress()) return;
+
+    setIsProcessing(true);
+    // Simulate Google Pay processing
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const id = await placeOrder.mutateAsync();
+      setGooglePayOrderId(id);
+    } catch {
+      toast.error("Google Pay payment failed. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const subtotal = cartTotal ?? 0n;
   const deliveryCharge = subtotal > 499n ? 0n : 49n;
   const total = subtotal + deliveryCharge;
@@ -300,6 +360,9 @@ export function CheckoutPage() {
 
   const discount = appliedCoupon?.saving ?? 0n;
   const finalTotal = total > discount ? total - discount : 0n;
+
+  const _isDigitalPayment =
+    paymentMethod === "googlepay" || paymentMethod === "skypay";
 
   return (
     <main className="container mx-auto px-4 py-6">
@@ -561,48 +624,91 @@ export function CheckoutPage() {
               <p className="text-sm font-semibold text-foreground mb-3">
                 Choose Payment Method
               </p>
-              <div className="grid grid-cols-2 gap-2">
-                {/* Sky Pay option */}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setPaymentMethod("skypay")}
-                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
-                    paymentMethod === "skypay"
-                      ? "border-sky-500 bg-sky-50 shadow-sm"
-                      : "border-border bg-background hover:border-sky-300 hover:bg-sky-50/50"
-                  }`}
-                  aria-pressed={paymentMethod === "skypay"}
-                  aria-label="Pay with Sky Pay"
-                >
-                  {paymentMethod === "skypay" && (
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sky-500" />
-                  )}
-                  {/* Sky Pay Logo Badge */}
-                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-500 shadow-sm">
-                    <Smartphone className="w-4 h-4 text-white" />
-                  </div>
-                  <span
-                    className={`text-xs font-bold tracking-wide ${
-                      paymentMethod === "skypay"
-                        ? "text-sky-600"
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    SKY PAY
-                  </span>
-                </motion.button>
 
-                {/* Card option */}
+              {/* Digital Payments Section */}
+              <div className="mb-3">
+                <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">
+                  Digital Payments
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Google Pay option */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setPaymentMethod("googlepay")}
+                    className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                      paymentMethod === "googlepay"
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-border bg-background hover:border-blue-300 hover:bg-blue-50/50"
+                    }`}
+                    aria-pressed={paymentMethod === "googlepay"}
+                    aria-label="Pay with Google Pay"
+                    data-ocid="checkout.googlepay.toggle"
+                  >
+                    {paymentMethod === "googlepay" && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500" />
+                    )}
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-gray-200 shadow-sm">
+                      <GooglePayLogo size={28} />
+                    </div>
+                    <span
+                      className={`text-xs font-bold tracking-wide ${
+                        paymentMethod === "googlepay"
+                          ? "text-blue-600"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      G PAY
+                    </span>
+                  </motion.button>
+
+                  {/* Sky Pay option */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setPaymentMethod("skypay")}
+                    className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                      paymentMethod === "skypay"
+                        ? "border-sky-500 bg-sky-50 shadow-sm"
+                        : "border-border bg-background hover:border-sky-300 hover:bg-sky-50/50"
+                    }`}
+                    aria-pressed={paymentMethod === "skypay"}
+                    aria-label="Pay with Sky Pay"
+                    data-ocid="checkout.skypay.toggle"
+                  >
+                    {paymentMethod === "skypay" && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-sky-500" />
+                    )}
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-500 shadow-sm">
+                      <Smartphone className="w-4 h-4 text-white" />
+                    </div>
+                    <span
+                      className={`text-xs font-bold tracking-wide ${
+                        paymentMethod === "skypay"
+                          ? "text-sky-600"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      SKY PAY
+                    </span>
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Card Payments Section */}
+              <div>
+                <p className="text-xs text-muted-foreground font-medium mb-2 uppercase tracking-wide">
+                  Card Payment
+                </p>
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={() => setPaymentMethod("card")}
-                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
+                  className={`w-full relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
                     paymentMethod === "card"
                       ? "border-brand-orange bg-orange-50 shadow-sm"
                       : "border-border bg-background hover:border-orange-300 hover:bg-orange-50/50"
                   }`}
                   aria-pressed={paymentMethod === "card"}
                   aria-label="Pay by Card"
+                  data-ocid="checkout.card.toggle"
                 >
                   {paymentMethod === "card" && (
                     <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-brand-orange" />
@@ -617,7 +723,7 @@ export function CheckoutPage() {
                         : "text-muted-foreground"
                     }`}
                   >
-                    PAY BY CARD
+                    DEBIT / CREDIT CARD
                   </span>
                 </motion.button>
               </div>
@@ -644,16 +750,51 @@ export function CheckoutPage() {
                   onChange={(e) => setUpiId(e.target.value)}
                   className="border-sky-200 focus-visible:ring-sky-400 text-sm"
                   autoComplete="off"
+                  data-ocid="checkout.upi_id.input"
                 />
               </motion.div>
             )}
 
+            {/* Google Pay info */}
+            {paymentMethod === "googlepay" && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mb-4 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2"
+              >
+                <p className="text-xs text-blue-700 font-medium">
+                  You will be redirected to Google Pay to complete your payment
+                  securely.
+                </p>
+              </motion.div>
+            )}
+
             {/* Pay Button */}
-            {paymentMethod === "skypay" ? (
+            {paymentMethod === "googlepay" ? (
+              <Button
+                className="w-full bg-[#1a73e8] hover:bg-[#1557b0] text-white font-bold h-12 text-base gap-2 transition-colors"
+                onClick={() => void handleGooglePay()}
+                disabled={isProcessing || placeOrder.isPending}
+                data-ocid="checkout.googlepay.primary_button"
+              >
+                {isProcessing || placeOrder.isPending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Processing...
+                  </>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <GooglePayLogo size={28} />
+                    <span>Pay with Google Pay</span>
+                  </span>
+                )}
+              </Button>
+            ) : paymentMethod === "skypay" ? (
               <Button
                 className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold h-12 text-base gap-2 transition-colors"
                 onClick={() => void handleSkyPay()}
                 disabled={isProcessing || placeOrder.isPending}
+                data-ocid="checkout.skypay.primary_button"
               >
                 {isProcessing || placeOrder.isPending ? (
                   <>
@@ -670,6 +811,7 @@ export function CheckoutPage() {
                 className="w-full bg-brand-orange hover:bg-orange-600 text-white font-bold h-12 text-base gap-2"
                 onClick={() => void handleCheckout()}
                 disabled={isProcessing || createCheckout.isPending}
+                data-ocid="checkout.card.primary_button"
               >
                 {isProcessing || createCheckout.isPending ? (
                   <>
@@ -685,14 +827,66 @@ export function CheckoutPage() {
 
             <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Shield className="w-3 h-3" />
-              {paymentMethod === "skypay"
-                ? "Secure payment by Sky Pay"
-                : "Secure payment by Stripe"}
+              {paymentMethod === "googlepay"
+                ? "Secure payment by Google Pay"
+                : paymentMethod === "skypay"
+                  ? "Secure payment by Sky Pay"
+                  : "Secure payment by Stripe"}
             </div>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function GooglePaySuccessView({ orderId }: { orderId: string }) {
+  const navigate = useNavigate();
+
+  return (
+    <div className="container mx-auto px-4 py-20 text-center">
+      <div className="max-w-md mx-auto">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 15 }}
+        >
+          <CheckCircle2 className="w-20 h-20 text-green-600 mx-auto mb-4" />
+        </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 font-bold text-sm px-3 py-1.5 rounded-full mb-4">
+            <GooglePayLogo size={24} />
+            Google Pay
+          </div>
+          <h2 className="font-display font-bold text-2xl mb-2">
+            Payment Successful via Google Pay!
+          </h2>
+          <p className="text-muted-foreground mb-2">Your Order ID:</p>
+          <p className="font-mono font-bold text-brand-navy text-sm bg-muted px-3 py-1.5 rounded-lg inline-block mb-6">
+            {orderId}
+          </p>
+          <div className="flex gap-3 justify-center">
+            <Button
+              className="bg-[#1a73e8] hover:bg-[#1557b0] text-white"
+              onClick={() =>
+                void navigate({ to: "/order/$orderId", params: { orderId } })
+              }
+            >
+              Track Order
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/products" search={{}}>
+                Continue Shopping
+              </Link>
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    </div>
   );
 }
 
